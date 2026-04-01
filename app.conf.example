@@ -1,0 +1,58 @@
+[app]
+# Loglevel can be one of: debug, info, warning, error, critical
+loglevel=debug
+
+[database]
+# Dsn for database connection
+dsn=postgresql+psycopg://postgres:postgres@postgres:5432/postgres
+# Retry backoff (in seconds) for database connection
+retry_backoff=0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 4.8, 6.4, 10.0
+# Connection pool size, use 0 for unlimited connections
+pool_size=5
+# Max overflow for connection pool
+max_overflow=10
+# Pre ping the connection before using it
+pool_pre_ping=False
+# Recycle the connection after this time (in seconds)
+pool_recycle=1800
+
+[telemetry]
+# Telemetry is enabled or not
+enabled = False
+# Endpoint to GRPC server for telemetry
+endpoint = http://tracing:4317
+# Service name to use
+service_name = Nationale Verwijsindex Gateway Verifier 
+# Tracer name to use
+tracer_name = zmodules.service.nationale_verwijsindex_gateway_verifier
+
+[stats]
+# Statsd is enabled or not
+enabled = False
+# Host for statsd server
+host = 127.0.0.1
+# Port for statsd server
+port = 8125
+# Module name for statsd
+module_name = nationale-verwijsindex-gateway-verifier 
+
+
+[uvicorn]
+# If true, the api docs will be enabled
+swagger_enabled = True
+# Endpoint for swagger api docs
+docs_url = /docs
+# Endpoint for redoc api docs
+redoc_url = /redocs
+# Host for the uvicorn server
+host = 0.0.0.0
+# Port for the uvicorn server
+port = 8503
+# Live reload for uvicorn server
+reload = True
+
+# SSL configuration
+use_ssl = False
+ssl_base_dir = secrets/ssl
+ssl_cert_file = server.cert
+ssl_key_file = server.key
