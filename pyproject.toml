@@ -33,7 +33,7 @@ puzi = { git = "https://github.com/minvws/puzi-python" }
 pytest = "^9.0.2"
 pytest-cov = "^7.0.0"
 pytest-mock = "^3.15.0"
-ruff = "0.15.7"
+ruff = "0.15.8"
 codespell = "^2.4.1"
 pip-audit = "^2.10.0"
 
