@@ -8,6 +8,6 @@ from app.db.repository.base import RepositoryBase
 @repository(HealthcareProviderEntity)
 class HealthcareProvidersRepository(RepositoryBase):
     def exists(self, oin: str) -> bool:
-        stmt = select(exists()).where(HealthcareProviderEntity.oin == oin)
+        stmt = select(exists(HealthcareProviderEntity)).where(HealthcareProviderEntity.oin == oin)
         result = self.db_session.session.execute(stmt).scalar()
         return result or False
