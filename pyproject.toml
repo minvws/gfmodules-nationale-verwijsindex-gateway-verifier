@@ -28,6 +28,7 @@ opentelemetry-instrumentation-requests = "^0.60b1"
 requests = "^2.32.5"
 statsd = "^4.0.1"
 puzi = { git = "https://github.com/minvws/puzi-python" }
+jwcrypto = "^1.5.6"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.2"
