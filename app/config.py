@@ -4,7 +4,7 @@ import os
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,17 @@ class LogLevel(str, Enum):
 
 class ConfigApp(BaseModel):
     loglevel: LogLevel = Field(default=LogLevel.info)
+    oin_ca_path: str
+    issuer: str
+    audience: list[str]
+    jwks_url: str
+
+    @field_validator("audience", mode="before")
+    @classmethod
+    def parse_audience(cls, v: str | list[str]) -> list[str]:
+        if isinstance(v, str):
+            return [item.strip() for item in v.split(",") if item.strip()]
+        return v
 
 
 class ConfigDatabase(BaseModel):

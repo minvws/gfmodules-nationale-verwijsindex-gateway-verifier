@@ -1,20 +1,21 @@
 from app.db.models.healthcare_provider import HealthcareProviderEntity
+from app.db.models.oin import OinNumber
 from tests.conftest import MockHealthcareProviderRepository
 
 
-def test_exists_should_return_true(
+def test_find_should_return_entity(
     healthcare_provider_repository: MockHealthcareProviderRepository,
     healthcare_provider_entity: HealthcareProviderEntity,
 ) -> None:
     with healthcare_provider_repository.db_session:
         data = healthcare_provider_repository.add_one(healthcare_provider_entity)
-        expected = healthcare_provider_repository.exists(data.oin)
+        result = healthcare_provider_repository.find(OinNumber(data.oin), None)
 
-        assert expected is True
+        assert len(result) > 0
 
 
-def test_exists_should_return_false(healthcare_provider_repository: MockHealthcareProviderRepository, oin: str) -> None:
+def test_find_should_return_empty(healthcare_provider_repository: MockHealthcareProviderRepository, oin: str) -> None:
     with healthcare_provider_repository.db_session:
-        expected = healthcare_provider_repository.exists(oin)
+        result = healthcare_provider_repository.find(OinNumber(oin), None)
 
-        assert expected is False
+        assert len(result) == 0
