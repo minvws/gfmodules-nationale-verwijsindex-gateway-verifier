@@ -1,7 +1,7 @@
 [app]
 # Loglevel can be one of: debug, info, warning, error, critical
 loglevel=debug
-# Path to OIN ca certificate, used for verifying the OIN API server's TLS certificate
+# Path to the trusted OIN CA certificate, used to validate client certificates issued by this CA or its intermediates and containing an OIN in subject.serialNumber.
 oin_ca_path=secrets/oin-ca.crt
 # URL of the Oauth service that issued the access token, used for validating the access token
 issuer=https://oauth-service
