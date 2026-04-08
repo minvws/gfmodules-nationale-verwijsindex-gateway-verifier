@@ -1,6 +1,13 @@
 [app]
 # Loglevel can be one of: debug, info, warning, error, critical
 loglevel=debug
+# Path to OIN ca certificate, used for verifying the OIN API server's TLS certificate
+oin_ca_path=secrets/oin-ca.crt
+# URL of the Oauth service that issued the access token, used for validating the access token
+issuer=https://oauth-service
+# Comma separated list of audiences to use for validating the access token
+audience=nvi,foo,bar
+jwks_url=http://localhost:8532/oauth/jwks.json
 
 [database]
 # Dsn for database connection

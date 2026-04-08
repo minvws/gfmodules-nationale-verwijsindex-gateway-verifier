@@ -7,7 +7,7 @@ from app.config import ConfigDatabase
 from app.db.db import Database
 from app.db.models.healthcare_provider import HealthcareProviderEntity
 from app.db.repository.healthcare_provider import HealthcareProvidersRepository
-from app.services.healthcare_provider import HeatlhcareProviderService
+from app.services.healthcare_provider import HealthcareProviderService
 
 
 class MockHealthcareProviderRepository(HealthcareProvidersRepository):
@@ -40,13 +40,13 @@ def healthcare_provider_repository(
 
 
 @pytest.fixture()
-def healthcare_provider_service(database: Database) -> HeatlhcareProviderService:
-    return HeatlhcareProviderService(database)
+def healthcare_provider_service(database: Database) -> HealthcareProviderService:
+    return HealthcareProviderService(database)
 
 
 @pytest.fixture()
 def oin() -> str:
-    return "000000011234567000"
+    return "00000001123456700000"
 
 
 @pytest.fixture()
