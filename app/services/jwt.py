@@ -14,13 +14,19 @@ class JwtException(Exception):
 
 
 class JWTService:
-    def __init__(self, jwks_url: str) -> None:
+    def __init__(
+        self, jwks_url: str, mtls_cert: str | None, mtls_key: str | None, verify_ca: str | bool | None
+    ) -> None:
         self.jwks_url = jwks_url
         self.jwks_store: jwk.JWKSet | None = None
         self.jwks_ttl: datetime | None = None
+        self._mtls_cert = mtls_cert
+        self._mtls_key = mtls_key
+        self._verify_ca = verify_ca
 
     def refresh_jwks(self) -> None:
-        r = requests.get(self.jwks_url, timeout=5)
+        cert = (self._mtls_cert, self._mtls_key) if self._mtls_cert and self._mtls_key else None
+        r = requests.get(self.jwks_url, timeout=5, cert=cert, verify=self._verify_ca)
         r.raise_for_status()
         self.jwks_store = jwk.JWKSet.from_json(r.text)
 

@@ -9,6 +9,12 @@ issuer=https://oauth-service
 audience=nvi,foo,bar
 # URL of the JWKS endpoint to fetch the public keys for validating the access token
 jwks_url=http://localhost:8532/oauth/jwks.json
+# mTLS certificate for connecting to the issuer
+mtls_cert=
+# mTLS key for connecting to the issuer
+mtls_key=
+# CA verification
+verify_ca=
 
 [database]
 # Dsn for database connection

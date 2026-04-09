@@ -28,6 +28,9 @@ class ConfigApp(BaseModel):
     issuer: str
     audience: list[str]
     jwks_url: str
+    mtls_cert: str | None = Field(default=None)
+    mtls_key: str | None = Field(default=None)
+    verify_ca: str | bool = Field(default=True)
 
     @field_validator("audience", mode="before")
     @classmethod
