@@ -10,6 +10,7 @@ from app.middleware.stats import StatsdMiddleware
 from app.routers.default import router as default_router
 from app.routers.health import router as health_router
 from app.routers.healthcare_provider import router as healthcare_provider_router
+from app.routers.proxy import router as proxy_router
 
 
 def get_uvicorn_params() -> dict[str, Any]:
@@ -70,7 +71,7 @@ def setup_fastapi() -> FastAPI:
 
     container.configure()
 
-    routers = [default_router, health_router, healthcare_provider_router]
+    routers = [default_router, health_router, healthcare_provider_router, proxy_router]
 
     for router in routers:
         fastapi.include_router(router)

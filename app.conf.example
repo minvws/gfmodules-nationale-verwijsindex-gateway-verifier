@@ -7,6 +7,7 @@ oin_ca_path=secrets/oin-ca.crt
 issuer=https://oauth-service
 # Comma separated list of audiences to use for validating the access token
 audience=nvi,foo,bar
+# URL of the JWKS endpoint to fetch the public keys for validating the access token
 jwks_url=http://localhost:8532/oauth/jwks.json
 
 [database]
@@ -63,3 +64,10 @@ use_ssl = False
 ssl_base_dir = secrets/ssl
 ssl_cert_file = server.cert
 ssl_key_file = server.key
+
+
+[kong_proxy]
+# Enable the /proxy for testing without kong infrastructure
+enabled = True
+# Url to proxy to. Could be a local NVI, or something like https://httpbin.org/headers
+url =

@@ -1,5 +1,6 @@
 import json
 from unittest.mock import MagicMock
+from uuid import UUID
 
 import pytest
 from fastapi import FastAPI
@@ -9,6 +10,7 @@ from app.config import (
     Config,
     ConfigApp,
     ConfigDatabase,
+    ConfigKongProxy,
     ConfigStats,
     ConfigTelemetry,
     ConfigUvicorn,
@@ -37,6 +39,7 @@ def test_config():
         telemetry=ConfigTelemetry(endpoint=None, service_name=None, tracer_name=None),
         stats=ConfigStats(host=None, port=None, module_name=None),
         uvicorn=ConfigUvicorn(ssl_base_dir=None, ssl_cert_file=None, ssl_key_file=None),
+        kong_proxy=ConfigKongProxy(url="http://kong.example.com"),
     )
     set_config(cfg)
     yield cfg
@@ -54,15 +57,32 @@ def ca_service():
 def jwt_service():
     mock = MagicMock()
     token = MagicMock()
-    token.claims = json.dumps({"oin": OIN})
+    token.claims = json.dumps({"oin": OIN, "authorized_role": "test-role", "aud": "test-audience"})
     mock.verify.return_value = token
     return mock
+
+
+ENTITY_ID = UUID("12345678-1234-5678-1234-567812345678")
+
+
+def make_entity(**kwargs: object) -> MagicMock:
+    entity = MagicMock()
+    entity.id = kwargs.get("id", ENTITY_ID)
+    entity.oin = kwargs.get("oin", OIN)
+    entity.ura_number = kwargs.get("ura_number", "00000123")
+    entity.source_id = kwargs.get("source_id", None)
+    entity.common_name = kwargs.get("common_name", "Test Provider")
+    entity.is_source = kwargs.get("is_source", True)
+    entity.is_viewer = kwargs.get("is_viewer", False)
+    entity.status = kwargs.get("status", "active")
+    entity.deleted_at = kwargs.get("deleted_at", None)
+    return entity
 
 
 @pytest.fixture
 def healthcare_service():
     mock = MagicMock()
-    mock.exists.return_value = True
+    mock.find.return_value = [make_entity()]
     return mock
 
 
@@ -115,7 +135,7 @@ class TestJWTValidation:
 class TestOINMatching:
     def test_jwt_oin_mismatch_with_cert_oin_returns_400(self, client: TestClient, jwt_service: MagicMock) -> None:
         token = MagicMock()
-        token.claims = json.dumps({"oin": OTHER_OIN})
+        token.claims = json.dumps({"oin": OTHER_OIN, "authorized_role": "test-role", "aud": "test-audience"})
         jwt_service.verify.return_value = token
 
         response = client.get("/validate", headers=bearer())
@@ -132,22 +152,31 @@ class TestOINMatching:
 
 
 class TestHealthcareProviderLookup:
-    def test_oin_found_returns_200(self, client: TestClient, healthcare_service: MagicMock) -> None:
-        healthcare_service.exists.return_value = True
+    def test_match_returns_200_with_x_headers(self, client: TestClient, healthcare_service: MagicMock) -> None:
         response = client.get("/validate", headers=bearer())
         assert response.status_code == 200
+        body = response.json()
+        assert body["X-Oin-Number"] == OIN
+        assert body["X-Ura-Number"] == "00000123"
+        assert body["X-Authorized-Role"] == "test-role"
+        assert body["X-Audience"] == "test-audience"
 
-    def test_oin_not_found_returns_404(self, client: TestClient, healthcare_service: MagicMock) -> None:
-        healthcare_service.exists.return_value = False
+    def test_no_match_returns_404(self, client: TestClient, healthcare_service: MagicMock) -> None:
+        healthcare_service.find.return_value = []
         response = client.get("/validate", headers=bearer())
         assert response.status_code == 404
 
+    def test_multiple_matches_returns_400(self, client: TestClient, healthcare_service: MagicMock) -> None:
+        healthcare_service.find.return_value = [make_entity(), make_entity()]
+        response = client.get("/validate", headers=bearer())
+        assert response.status_code == 400
+
     def test_source_id_header_passed_to_service(self, client: TestClient, healthcare_service: MagicMock) -> None:
         client.get("/validate", headers={**bearer(), "X-Source-Id": "my-source"})
-        healthcare_service.exists.assert_called_once_with(OinNumber(OIN), "my-source")
+        healthcare_service.find.assert_called_once_with(OinNumber(OIN), "my-source")
 
     def test_missing_source_id_header_passes_none_to_service(
         self, client: TestClient, healthcare_service: MagicMock
     ) -> None:
         client.get("/validate", headers=bearer())
-        healthcare_service.exists.assert_called_once_with(OinNumber(OIN), None)
+        healthcare_service.find.assert_called_once_with(OinNumber(OIN), None)

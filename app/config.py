@@ -76,12 +76,18 @@ class ConfigStats(BaseModel):
     module_name: str | None
 
 
+class ConfigKongProxy(BaseModel):
+    enabled: bool = Field(default=False)
+    url: str
+
+
 class Config(BaseModel):
     app: ConfigApp
     database: ConfigDatabase
     telemetry: ConfigTelemetry
     stats: ConfigStats
     uvicorn: ConfigUvicorn
+    kong_proxy: ConfigKongProxy
 
 
 def read_ini_file(path: str) -> Any:
