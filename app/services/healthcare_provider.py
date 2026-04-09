@@ -1,6 +1,7 @@
 import logging
 
 from app.db.db import Database
+from app.db.models.healthcare_provider import HealthcareProviderEntity
 from app.db.models.oin import OinNumber
 from app.db.repository.healthcare_provider import HealthcareProvidersRepository
 
@@ -18,3 +19,9 @@ class HealthcareProviderService:
             result = repo.find(oin, source_id)
 
             return len(result) > 0
+
+    def find(self, oin: OinNumber, source_id: str | None = None) -> list[HealthcareProviderEntity]:
+        logger.info(f"HealthcareProviderService.find: {oin} {source_id}")
+        with self.db.get_db_session() as session:
+            repo = session.get_repository(HealthcareProvidersRepository)
+            return repo.find(oin, source_id)
