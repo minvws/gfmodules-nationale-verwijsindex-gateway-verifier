@@ -24,7 +24,12 @@ def container_config(binder: inject.Binder) -> None:
     ca_service = CaService(config.app.oin_ca_path)
     binder.bind(CaService, ca_service)
 
-    jwt_service = JWTService(config.app.jwks_url)
+    jwt_service = JWTService(
+        config.app.jwks_url,
+        config.app.mtls_cert,
+        config.app.mtls_key,
+        config.app.verify_ca,
+    )
     binder.bind(JWTService, jwt_service)
 
 
