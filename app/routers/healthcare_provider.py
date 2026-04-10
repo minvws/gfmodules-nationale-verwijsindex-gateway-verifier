@@ -23,13 +23,17 @@ def run_validate(
 ) -> Response:
     config = get_config()
 
+    logger.debug("Received request for /validate endpoint")
+
     auth = request.headers.get("Authorization")
     if auth is None or not auth.startswith("Bearer "):
+        logger.error("Received invalid authorization header")
         return Response("Bearer authorization header is required", status_code=401)
     token = auth[len("Bearer ") :]
 
     (is_oin_cert, cert_oin) = ca_service.is_oin_certificate(request)
     if not is_oin_cert or cert_oin is None:
+        logger.error("Failed to validate OIN certificate from request")
         return Response("Failed to extract OIN certificate from request.", status_code=403)
 
     try:
@@ -41,15 +45,19 @@ def run_validate(
     claims = json.loads(token.claims)
     jwt_oin = claims["oin"]
     if jwt_oin is None:
+        logger.error("Failed to extract OIN claims from token")
         return Response("Failed to extract OIN number", status_code=400)
     if str(jwt_oin) != str(cert_oin):
+        logger.error(f"OIN mismatch between token and cert: cert: {cert_oin}, token: {jwt_oin}")
         return Response("Certificate OIN does not match JWT OIN", status_code=400)
 
-    source_id = request.headers.get("X-Source-Id") or None
+    source_id = claims.get("source_id")
     entities = healthcare_service.find(cert_oin, source_id)
     if len(entities) == 0:
+        logger.error("Failed to find any entities for {oin} / {source_id}")
         return Response(status_code=404)
     if len(entities) > 1:
+        logger.error("Found multiple entities for {oin} / {source_id}")
         return Response("Multiple healthcare provider entries found for the given OIN and source_id", status_code=400)
 
     return JSONResponse(
