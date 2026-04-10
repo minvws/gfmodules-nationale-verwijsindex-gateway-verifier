@@ -171,11 +171,18 @@ class TestHealthcareProviderLookup:
         response = client.get("/validate", headers=bearer())
         assert response.status_code == 400
 
-    def test_source_id_header_passed_to_service(self, client: TestClient, healthcare_service: MagicMock) -> None:
-        client.get("/validate", headers={**bearer(), "X-Source-Id": "my-source"})
+    def test_source_id_header_passed_to_service(
+        self, client: TestClient, healthcare_service: MagicMock, jwt_service: MagicMock
+    ) -> None:
+        token = MagicMock()
+        token.claims = json.dumps(
+            {"oin": OIN, "authorized_role": "test-role", "aud": "test-audience", "source_id": "my-source"}
+        )
+        jwt_service.verify.return_value = token
+        client.get("/validate", headers=bearer())
         healthcare_service.find.assert_called_once_with(OinNumber(OIN), "my-source")
 
-    def test_missing_source_id_header_passes_none_to_service(
+    def test_missing_source_id_in_jwt_passes_none_to_service(
         self, client: TestClient, healthcare_service: MagicMock
     ) -> None:
         client.get("/validate", headers=bearer())

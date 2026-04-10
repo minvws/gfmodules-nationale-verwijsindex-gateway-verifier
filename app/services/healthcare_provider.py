@@ -13,7 +13,7 @@ class HealthcareProviderService:
         self.db = db
 
     def exists(self, oin: OinNumber, source_id: str | None = None) -> bool:
-        logger.info(f"HealthcareProviderService.exists: {oin} {source_id}")
+        logger.debug(f"HealthcareProviderService.exists: {oin} {source_id}")
         with self.db.get_db_session() as session:
             repo = session.get_repository(HealthcareProvidersRepository)
             result = repo.find(oin, source_id)
@@ -21,7 +21,7 @@ class HealthcareProviderService:
             return len(result) > 0
 
     def find(self, oin: OinNumber, source_id: str | None = None) -> list[HealthcareProviderEntity]:
-        logger.info(f"HealthcareProviderService.find: {oin} {source_id}")
+        logger.debug(f"HealthcareProviderService.find: {oin} {source_id}")
         with self.db.get_db_session() as session:
             repo = session.get_repository(HealthcareProvidersRepository)
             return repo.find(oin, source_id)
