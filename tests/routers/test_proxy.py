@@ -24,7 +24,9 @@ from app.services.jwt import JwtException
 OIN = "00000001123456700000"
 KONG_URL = "http://kong.example.com/service"
 
-VALID_CLAIMS = json.dumps({"oin": OIN, "authorized_role": "test-role", "aud": "test-audience"})
+VALID_CLAIMS = json.dumps(
+    {"oin": OIN, "sub": "00000123", "authorized_role": "test-role", "aud": "test-audience", "scope": "test-scope"}
+)
 
 
 @pytest.fixture(autouse=True)
