@@ -54,11 +54,18 @@ def run_validate(
     source_id = claims.get("source_id")
     entities = healthcare_service.find(cert_oin, source_id)
     if len(entities) == 0:
-        logger.error("Failed to find any entities for {oin} / {source_id}")
+        logger.error(f"Failed to find any entities for {cert_oin} / {source_id}")
         return Response(status_code=404)
     if len(entities) > 1:
-        logger.error("Found multiple entities for {oin} / {source_id}")
+        logger.error(f"Found multiple entities for {cert_oin} / {source_id}")
         return Response("Multiple healthcare provider entries found for the given OIN and source_id", status_code=400)
+
+    # Check if the URA for this oin/source is the same as in the JWT
+    if entities[0].ura_number != claims["sub"]:
+        logger.error(
+            f"Failed to verify OIN number for {cert_oin} / {source_id}: {entities[0].ura_number} <-> {claims['sub']}"
+        )
+        return Response("Failed to verify OIN number", status_code=400)
 
     return JSONResponse(
         {
@@ -67,6 +74,7 @@ def run_validate(
             "X-Ura-Number": entities[0].ura_number,
             "X-Authorized-Role": claims["authorized_role"],
             "X-Audience": claims["aud"],
+            "X-Scope": claims["scope"],
         },
         status_code=200,
     )

@@ -57,7 +57,9 @@ def ca_service():
 def jwt_service():
     mock = MagicMock()
     token = MagicMock()
-    token.claims = json.dumps({"oin": OIN, "authorized_role": "test-role", "aud": "test-audience"})
+    token.claims = json.dumps(
+        {"oin": OIN, "sub": "00000123", "authorized_role": "test-role", "aud": "test-audience", "scope": "test-scope"}
+    )
     mock.verify.return_value = token
     return mock
 
@@ -176,7 +178,14 @@ class TestHealthcareProviderLookup:
     ) -> None:
         token = MagicMock()
         token.claims = json.dumps(
-            {"oin": OIN, "authorized_role": "test-role", "aud": "test-audience", "source_id": "my-source"}
+            {
+                "oin": OIN,
+                "sub": "00000123",
+                "authorized_role": "test-role",
+                "aud": "test-audience",
+                "scope": "test-scope",
+                "source_id": "my-source",
+            }
         )
         jwt_service.verify.return_value = token
         client.get("/validate", headers=bearer())
