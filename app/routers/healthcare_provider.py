@@ -43,8 +43,8 @@ def run_validate(
         return Response("Token verification failed", status_code=400)
 
     claims = json.loads(token.claims)
-    jwt_oin = claims["oin"]
-    if jwt_oin is None:
+    jwt_oin = claims.get("oin") or claims.get("oin_number")
+    if not jwt_oin:
         logger.error("Failed to extract OIN claims from token")
         return Response("Failed to extract OIN number", status_code=400)
     if str(jwt_oin) != str(cert_oin):
