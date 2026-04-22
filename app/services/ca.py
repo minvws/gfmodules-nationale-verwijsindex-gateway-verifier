@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import logging
 import os
 from typing import List
@@ -5,6 +7,7 @@ from urllib.parse import unquote
 
 from fastapi import Request
 from OpenSSL import crypto
+from uzireader.uziserver import UziServer
 
 from app.db.models.oin import OinNumber
 
@@ -15,73 +18,89 @@ logger = logging.getLogger(__name__)
 
 class CaService:
     """
-    Service for handling CA certificate verification.
+    Service for handling CA certificate verification and cert-type detection.
     """
 
-    def __init__(self, oin_ca_cert_path: str) -> None:
-        if not os.path.exists(oin_ca_cert_path):
-            raise ValueError(f"CA certificate file not found: {oin_ca_cert_path}")
-        self._oin_store = crypto.X509Store()
-        self._oin_store.load_locations(cafile=oin_ca_cert_path)
+    def __init__(self, cert_paths: list[str]) -> None:
+        self._ca_store = crypto.X509Store()
+
+        for cert_path in cert_paths:
+            if not os.path.exists(cert_path):
+                raise ValueError(f"CA certificate file not found: {cert_path}")
+            self._ca_store.load_locations(cert_path)
+
+    def get_certs(self, request: Request) -> list[crypto.X509]:
+        certs = self._verify_and_fetch(request, self._ca_store)
+        if certs is None:
+            logger.debug("No valid client certificate(s) found")
+            return []
+        return certs
 
     def is_oin_certificate(self, request: Request) -> tuple[bool, OinNumber | None]:
-        """
-        Determines if the server certificate is an OIN certificate signed by the OIN CA.
-        """
-        if not self._is_server_certificate(request, self._oin_store):
-            logger.debug("server certificate not found or CA verification failed.")
-            return False, None
-
-        # Check for OIN number inside the cert
-        certs = self.get_pem_from_request(request)
+        """Returns (True, OinNumber) if the leaf cert has a 20-digit serialNumber in its subject."""
+        certs = self.get_certs(request)
         if not certs:
-            logger.debug("client certificate not found or verification failed.")
+            return False, None
+        oin = self._extract_oin_from_cert(certs[0])
+        return (oin is not None, oin)
+
+    def is_uzi_certificate(self, request: Request) -> tuple[bool, str | None]:
+        """Returns (True, ura_number) if the leaf cert is a valid UZI server certificate."""
+        if not self.get_certs(request):
+            return False, None
+        pems = self.get_pem_from_request(request)
+        if not pems:
+            return False, None
+        try:
+            uzi = UziServer(verify="SUCCESS", cert=pems[0])
+            return True, uzi["SubscriberNumber"]
+        except Exception:
             return False, None
 
-        x509_certs = [crypto.load_certificate(crypto.FILETYPE_PEM, cert_pem.encode("ascii")) for cert_pem in certs]
-        leaf, *chain = x509_certs
+    def is_ldn_certificate(self, request: Request) -> bool:
+        """LDN certs cannot be identified by content; accept any valid cert that is not OIN or UZI."""
+        certs = self.get_certs(request)
+        return len(certs) > 0
 
-        # Fetch serialNumber from components
-        subject = leaf.get_subject()
-        serial = None
+    def check_cert_fingerprint(self, request: Request, thumbprint: str) -> bool:
+        """Verifies the leaf cert's SHA-256 DER fingerprint matches the x5t#S256 value from the JWT cnf claim."""
+        certs = self.get_certs(request)
+        if not certs:
+            return False
+        der = crypto.dump_certificate(crypto.FILETYPE_ASN1, certs[0])
+        computed = base64.urlsafe_b64encode(hashlib.sha256(der).digest()).rstrip(b"=").decode("ascii")
+        return computed == thumbprint
+
+    @staticmethod
+    def _extract_oin_from_cert(cert: crypto.X509) -> OinNumber | None:
+        subject = cert.get_subject()
         for key, value in subject.get_components():
             if key == b"serialNumber":
                 serial = value.decode("ascii")
-                break
+                if len(serial) == 20 and serial.isdigit():
+                    return OinNumber(serial)
+        return None
 
-        # Check if serial is 20 chars long, and contains only numbers
-        if serial is None or len(serial) != 20 or not str(serial).isdigit():
-            logger.debug("serial number %r is not a valid OIN number", serial)
-            return False, None
-
-        return True, OinNumber(serial)
-
-    def _is_server_certificate(self, request: Request, store: crypto.X509Store) -> bool:
-        """
-        Verifies the client certificate against the provided CA store.
-        """
+    def _verify_and_fetch(self, request: Request, store: crypto.X509Store) -> List[crypto.X509] | None:
         certs = self.get_pem_from_request(request)
         if not certs:
             logger.debug("client certificate not found or verification failed.")
-            return False
+            return None
 
         x509_certs = [crypto.load_certificate(crypto.FILETYPE_PEM, cert_pem.encode("ascii")) for cert_pem in certs]
         leaf, *chain = x509_certs
         ctx = crypto.X509StoreContext(store, leaf, chain)
         try:
             ctx.verify_certificate()
-            return True
+            return x509_certs
         except crypto.X509StoreContextError:
-            return False
+            return None
         except Exception:
             logger.exception("unexpected error during certificate verification.")
-            return False
+            return None
 
     @staticmethod
     def get_pem_from_request(request: Request) -> List[str]:
-        """
-        Extracts and returns the PEM-encoded client certificate from the request headers.
-        """
         header_value = request.headers.get(SSL_CLIENT_CERT_HEADER_NAME)
         if not header_value:
             logger.debug("client certificate not found or verification failed.")

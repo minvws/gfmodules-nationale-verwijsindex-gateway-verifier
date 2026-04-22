@@ -10,6 +10,7 @@ from app.config import (
     ConfigApp,
     ConfigDatabase,
     ConfigKongProxy,
+    ConfigOin,
     ConfigStats,
     ConfigTelemetry,
     ConfigUvicorn,
@@ -25,14 +26,22 @@ OIN = "00000001123456700000"
 KONG_URL = "http://kong.example.com/service"
 
 VALID_CLAIMS = json.dumps(
-    {"oin": OIN, "sub": "00000123", "authorized_role": "test-role", "aud": "test-audience", "scope": "test-scope"}
+    {
+        "oin": OIN,
+        "sub": "00000123",
+        "authorized_role": "test-role",
+        "aud": "test-audience",
+        "scope": "test-scope",
+        "cnf": {"x5t#S256": "validthumbprint"},
+    }
 )
 
 
 @pytest.fixture(autouse=True)
 def test_config():
     cfg = Config(
-        app=ConfigApp(
+        app=ConfigApp(),
+        oin=ConfigOin(
             oin_ca_path="/dev/null",
             issuer="test-issuer",
             audience=["test-audience"],
@@ -53,6 +62,9 @@ def test_config():
 def ca_service():
     mock = MagicMock()
     mock.is_oin_certificate.return_value = (True, OinNumber(OIN))
+    mock.is_uzi_certificate.return_value = (False, None)
+    mock.is_ldn_certificate.return_value = False
+    mock.check_cert_fingerprint.return_value = True
     return mock
 
 
@@ -144,9 +156,9 @@ class TestProxyForwarding:
         with patch("app.routers.proxy.http_requests.request", return_value=kong_ok()) as mock_req:
             client.post("/proxy", headers=bearer())
             sent_headers = mock_req.call_args[1]["headers"]
-            assert "X-Oin-Number" in sent_headers
-            assert sent_headers["X-Oin-Number"] == OIN
-            assert "X-Ura-Number" in sent_headers
+            assert "x-gf-oin" in sent_headers
+            assert sent_headers["x-gf-oin"] == OIN
+            assert "x-gf-ura" in sent_headers
 
     def test_original_body_forwarded(self, client: TestClient) -> None:
         with patch("app.routers.proxy.http_requests.request", return_value=kong_ok()) as mock_req:

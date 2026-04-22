@@ -11,6 +11,7 @@ from app.config import (
     ConfigApp,
     ConfigDatabase,
     ConfigKongProxy,
+    ConfigOin,
     ConfigStats,
     ConfigTelemetry,
     ConfigUvicorn,
@@ -19,7 +20,7 @@ from app.config import (
 )
 from app.container import get_ca_service, get_healthcare_provider_service, get_jwt_service
 from app.db.models.oin import OinNumber
-from app.routers.healthcare_provider import router
+from app.routers.validator import router
 from app.services.jwt import JwtException
 
 OIN = "00000001123456700000"
@@ -29,7 +30,8 @@ OTHER_OIN = "00000002987654321000"
 @pytest.fixture(autouse=True)
 def test_config():
     cfg = Config(
-        app=ConfigApp(
+        app=ConfigApp(),
+        oin=ConfigOin(
             oin_ca_path="/dev/null",
             issuer="test-issuer",
             audience=["test-audience"],
@@ -50,6 +52,9 @@ def test_config():
 def ca_service():
     mock = MagicMock()
     mock.is_oin_certificate.return_value = (True, OinNumber(OIN))
+    mock.is_uzi_certificate.return_value = (False, None)
+    mock.is_ldn_certificate.return_value = False
+    mock.check_cert_fingerprint.return_value = True
     return mock
 
 
@@ -58,7 +63,14 @@ def jwt_service():
     mock = MagicMock()
     token = MagicMock()
     token.claims = json.dumps(
-        {"oin": OIN, "sub": "00000123", "authorized_role": "test-role", "aud": "test-audience", "scope": "test-scope"}
+        {
+            "oin": OIN,
+            "sub": "00000123",
+            "authorized_role": "test-role",
+            "aud": "test-audience",
+            "scope": "test-scope",
+            "cnf": {"x5t#S256": "validthumbprint"},
+        }
     )
     mock.verify.return_value = token
     return mock
@@ -137,7 +149,9 @@ class TestJWTValidation:
 class TestOINMatching:
     def test_jwt_oin_mismatch_with_cert_oin_returns_400(self, client: TestClient, jwt_service: MagicMock) -> None:
         token = MagicMock()
-        token.claims = json.dumps({"oin": OTHER_OIN, "authorized_role": "test-role", "aud": "test-audience"})
+        token.claims = json.dumps(
+            {"oin": OTHER_OIN, "authorized_role": "test-role", "aud": "test-audience", "cnf": {"x5t#S256": "t"}}
+        )
         jwt_service.verify.return_value = token
 
         response = client.get("/validate", headers=bearer())
@@ -153,15 +167,55 @@ class TestOINMatching:
         assert response.status_code == 400
 
 
+class TestCertificateFingerprint:
+    def test_missing_cnf_claim_returns_400(self, client: TestClient, jwt_service: MagicMock) -> None:
+        token = MagicMock()
+        token.claims = json.dumps(
+            {"oin": OIN, "sub": "00000123", "authorized_role": "test-role", "aud": "test-audience"}
+        )
+        jwt_service.verify.return_value = token
+        response = client.get("/validate", headers=bearer())
+        assert response.status_code == 400
+        assert "fingerprint" in response.text.lower()
+
+    def test_fingerprint_mismatch_returns_400(self, client: TestClient, ca_service: MagicMock) -> None:
+        ca_service.check_cert_fingerprint.return_value = False
+        response = client.get("/validate", headers=bearer())
+        assert response.status_code == 400
+        assert "fingerprint" in response.text.lower()
+
+    def test_fingerprint_check_called_with_correct_thumbprint(
+        self, client: TestClient, ca_service: MagicMock, jwt_service: MagicMock
+    ) -> None:
+        token = MagicMock()
+        token.claims = json.dumps(
+            {
+                "oin": OIN,
+                "sub": "00000123",
+                "authorized_role": "test-role",
+                "aud": "test-audience",
+                "scope": "test-scope",
+                "cnf": {"x5t#S256": "abc123thumbprint"},
+            }
+        )
+        jwt_service.verify.return_value = token
+        client.get("/validate", headers=bearer())
+        ca_service.check_cert_fingerprint.assert_called_once()
+        call_args = ca_service.check_cert_fingerprint.call_args
+        assert call_args[0][1] == "abc123thumbprint"
+
+
 class TestHealthcareProviderLookup:
     def test_match_returns_200_with_x_headers(self, client: TestClient, healthcare_service: MagicMock) -> None:
         response = client.get("/validate", headers=bearer())
         assert response.status_code == 200
         body = response.json()
-        assert body["X-Oin-Number"] == OIN
-        assert body["X-Ura-Number"] == "00000123"
-        assert body["X-Authorized-Role"] == "test-role"
-        assert body["X-Audience"] == "test-audience"
+        assert body["x-gf-cert-type"] == "OIN"
+        assert body["x-gf-oin"] == OIN
+        assert body["x-gf-ura"] == "00000123"
+        assert body["x-gf-authorized-role"] == "test-role"
+        assert body["x-gf-audience"] == "test-audience"
+        assert body["x-gf-scope"] == "test-scope"
 
     def test_no_match_returns_404(self, client: TestClient, healthcare_service: MagicMock) -> None:
         healthcare_service.find.return_value = []
@@ -185,6 +239,7 @@ class TestHealthcareProviderLookup:
                 "aud": "test-audience",
                 "scope": "test-scope",
                 "source_id": "my-source",
+                "cnf": {"x5t#S256": "validthumbprint"},
             }
         )
         jwt_service.verify.return_value = token

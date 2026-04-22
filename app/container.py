@@ -21,14 +21,14 @@ def container_config(binder: inject.Binder) -> None:
     healthcare_provider_service = HealthcareProviderService(db)
     binder.bind(HealthcareProviderService, healthcare_provider_service)
 
-    ca_service = CaService(config.app.oin_ca_path)
+    ca_service = CaService([config.oin.oin_ca_path])
     binder.bind(CaService, ca_service)
 
     jwt_service = JWTService(
-        config.app.jwks_url,
-        config.app.mtls_cert,
-        config.app.mtls_key,
-        config.app.verify_ca,
+        config.oin.jwks_url,
+        config.oin.mtls_cert,
+        config.oin.mtls_key,
+        config.oin.verify_ca,
     )
     binder.bind(JWTService, jwt_service)
 

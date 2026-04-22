@@ -24,13 +24,26 @@ class LogLevel(str, Enum):
 
 class ConfigApp(BaseModel):
     loglevel: LogLevel = Field(default=LogLevel.info)
+    allow_oin_certs: bool = Field(default=True)
+    allow_ldn_certs: bool = Field(default=True)
+    allow_uzi_certs: bool = Field(default=True)
+
+
+class ConfigOin(BaseModel):
     oin_ca_path: str
     issuer: str
     audience: list[str]
     jwks_url: str
     mtls_cert: str | None = Field(default=None)
     mtls_key: str | None = Field(default=None)
-    verify_ca: str | bool = Field(default=True)
+    verify_ca: bool | str = Field(default=True)
+
+    @field_validator("verify_ca", mode="before")
+    @classmethod
+    def parse_verify_ca(cls, v: Any) -> Any:
+        if isinstance(v, str) and v.lower() in ("true", "false"):
+            return v.lower() == "true"
+        return v
 
     @field_validator("audience", mode="before")
     @classmethod
@@ -91,6 +104,7 @@ class Config(BaseModel):
     stats: ConfigStats
     uvicorn: ConfigUvicorn
     kong_proxy: ConfigKongProxy
+    oin: ConfigOin
 
 
 def read_ini_file(path: str) -> Any:
