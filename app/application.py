@@ -9,8 +9,8 @@ from app.config import get_config
 from app.middleware.stats import StatsdMiddleware
 from app.routers.default import router as default_router
 from app.routers.health import router as health_router
-from app.routers.healthcare_provider import router as healthcare_provider_router
 from app.routers.proxy import router as proxy_router
+from app.routers.validator import router as healthcare_provider_router
 
 
 def get_uvicorn_params() -> dict[str, Any]:
