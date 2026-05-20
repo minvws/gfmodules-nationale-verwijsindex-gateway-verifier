@@ -1,10 +1,8 @@
 import logging
+from typing import Dict
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-
-from app.container import get_database
-from app.db.db import Database
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -29,7 +27,6 @@ def ok_or_error(value: bool) -> str:
                             "summary": "All services healthy",
                             "value": {
                                 "status": "ok",
-                                "components": {"database": "ok"},
                             },
                         },
                     }
@@ -46,7 +43,6 @@ def ok_or_error(value: bool) -> str:
                             "summary": "Some services unhealthy",
                             "value": {
                                 "status": "error",
-                                "components": {"database": "error"},
                             },
                         },
                     }
@@ -56,12 +52,10 @@ def ok_or_error(value: bool) -> str:
     },
     tags=["Health"],
 )
-def health(db: Database = Depends(get_database)) -> JSONResponse:
+def health() -> JSONResponse:
     logger.info("Checking database health")
 
-    components = {
-        "database": ok_or_error(db.is_healthy()),
-    }
+    components: Dict[str, str] = {}
     healthy = ok_or_error(all(value == "ok" for value in components.values()))
     content = {"status": healthy, "components": components}
     if healthy == "ok":

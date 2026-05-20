@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 from app.config import (
     Config,
     ConfigApp,
-    ConfigDatabase,
     ConfigKongProxy,
     ConfigOin,
     ConfigStats,
@@ -17,8 +16,8 @@ from app.config import (
     reset_config,
     set_config,
 )
-from app.container import get_ca_service, get_healthcare_provider_service, get_jwt_service
-from app.db.models.oin import OinNumber
+from app.container import get_ca_service, get_jwt_service
+from app.models.oin import OinNumber
 from app.routers.proxy import router
 from app.services.jwt import JwtException
 
@@ -47,7 +46,6 @@ def test_config():
             audience=["test-audience"],
             jwks_url="http://localhost/jwks",
         ),
-        database=ConfigDatabase(dsn="sqlite:///:memory:", retry_backoff=[]),
         telemetry=ConfigTelemetry(endpoint=None, service_name=None, tracer_name=None),
         stats=ConfigStats(host=None, port=None, module_name=None),
         uvicorn=ConfigUvicorn(ssl_base_dir=None, ssl_cert_file=None, ssl_key_file=None),
@@ -78,21 +76,11 @@ def jwt_service():
 
 
 @pytest.fixture
-def healthcare_service():
-    mock = MagicMock()
-    entity = MagicMock()
-    entity.ura_number = "00000123"
-    mock.find.return_value = [entity]
-    return mock
-
-
-@pytest.fixture
-def client(ca_service, jwt_service, healthcare_service):
+def client(ca_service, jwt_service):
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_ca_service] = lambda: ca_service
     app.dependency_overrides[get_jwt_service] = lambda: jwt_service
-    app.dependency_overrides[get_healthcare_provider_service] = lambda: healthcare_service
     return TestClient(app)
 
 
@@ -129,11 +117,6 @@ class TestProxyValidation:
         response = client.post("/proxy", headers=bearer())
         assert response.status_code == 400
 
-    def test_no_match_returns_404(self, client: TestClient, healthcare_service: MagicMock) -> None:
-        healthcare_service.find.return_value = []
-        response = client.post("/proxy", headers=bearer())
-        assert response.status_code == 404
-
 
 class TestProxyForwarding:
     def test_forwards_to_kong_url(self, client: TestClient) -> None:
@@ -158,7 +141,6 @@ class TestProxyForwarding:
             sent_headers = mock_req.call_args[1]["headers"]
             assert "x-gf-oin" in sent_headers
             assert sent_headers["x-gf-oin"] == OIN
-            assert "x-gf-ura" in sent_headers
 
     def test_original_body_forwarded(self, client: TestClient) -> None:
         with patch("app.routers.proxy.http_requests.request", return_value=kong_ok()) as mock_req:

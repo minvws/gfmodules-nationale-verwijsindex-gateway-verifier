@@ -9,7 +9,7 @@ from fastapi import Request
 from OpenSSL import crypto
 from uzireader.uziserver import UziServer
 
-from app.db.models.oin import OinNumber
+from app.models.oin import OinNumber
 
 SSL_CLIENT_CERT_HEADER_NAME = "x-forwarded-tls-client-cert"
 

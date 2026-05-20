@@ -15,7 +15,6 @@ forwarding it to your backend.
    - Verifies the mTLS certificate is a valid OIN certificate
    - Verifies the JWT signature, issuer, audience, and expiry
    - Checks that the OIN in the JWT matches the OIN in the certificate
-   - Looks up the OIN (and optional `X-Source-Id`) in the healthcare provider database
 3. If validation fails, the error response is returned directly to the client (no forwarding).
 4. If validation succeeds, the identity fields from the validation result are added as HTTP headers (`X-Oin-Number`, 
    `X-Ura-Number`, `X-Source-Id`, `X-Authorized-Role`, `X-Audience`).

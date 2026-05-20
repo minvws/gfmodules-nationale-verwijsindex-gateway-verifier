@@ -1,12 +1,6 @@
 [app]
 # Loglevel can be one of: debug, info, warning, error, critical
 loglevel=debug
-# Allow OIN certificates for validation
-allow_oin_certs=True
-# Allow LDN certificates for validation
-allow_ldn_certs=True
-# Allow UZI certificates for validation
-allow_uzi_certs=True
 
 [oin]
 # Path to the trusted OIN CA certificate, used to validate client certificates issued by this CA or its intermediates and containing an OIN in subject.serialNumber.
@@ -23,22 +17,6 @@ mtls_cert=
 mtls_key=
 # CA verification
 verify_ca=
-
-[database]
-# Dsn for database connection
-dsn=postgresql+psycopg://postgres:postgres@postgres:5432/postgres
-# Create tables on startup
-create_tables=False
-# Retry backoff (in seconds) for database connection
-retry_backoff=0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 4.8, 6.4, 10.0
-# Connection pool size, use 0 for unlimited connections
-pool_size=5
-# Max overflow for connection pool
-max_overflow=10
-# Pre ping the connection before using it
-pool_pre_ping=False
-# Recycle the connection after this time (in seconds)
-pool_recycle=1800
 
 [telemetry]
 # Telemetry is enabled or not
