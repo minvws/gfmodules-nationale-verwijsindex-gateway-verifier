@@ -50,8 +50,6 @@ def test_config():
 def ca_service():
     mock = MagicMock()
     mock.is_oin_certificate.return_value = (True, OinNumber(OIN))
-    mock.is_uzi_certificate.return_value = (False, None)
-    mock.is_ldn_certificate.return_value = False
     mock.check_cert_fingerprint.return_value = True
     return mock
 

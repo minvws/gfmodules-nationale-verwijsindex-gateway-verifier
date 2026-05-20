@@ -24,7 +24,6 @@ opentelemetry-instrumentation-fastapi = "^0.60b1"
 opentelemetry-instrumentation-requests = "^0.60b1"
 requests = "^2.32.5"
 statsd = "^4.0.1"
-puzi = { git = "https://github.com/minvws/puzi-python" }
 pyopenssl = "^26.0.0"
 jwcrypto = "^1.5.7"
 

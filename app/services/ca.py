@@ -7,7 +7,6 @@ from urllib.parse import unquote
 
 from fastapi import Request
 from OpenSSL import crypto
-from uzireader.uziserver import UziServer
 
 from app.models.oin import OinNumber
 
@@ -43,24 +42,6 @@ class CaService:
             return False, None
         oin = self._extract_oin_from_cert(certs[0])
         return (oin is not None, oin)
-
-    def is_uzi_certificate(self, request: Request) -> tuple[bool, str | None]:
-        """Returns (True, ura_number) if the leaf cert is a valid UZI server certificate."""
-        if not self.get_certs(request):
-            return False, None
-        pems = self.get_pem_from_request(request)
-        if not pems:
-            return False, None
-        try:
-            uzi = UziServer(verify="SUCCESS", cert=pems[0])
-            return True, uzi["SubscriberNumber"]
-        except Exception:
-            return False, None
-
-    def is_ldn_certificate(self, request: Request) -> bool:
-        """LDN certs cannot be identified by content; accept any valid cert that is not OIN or UZI."""
-        certs = self.get_certs(request)
-        return len(certs) > 0
 
     def check_cert_fingerprint(self, request: Request, thumbprint: str) -> bool:
         """Verifies the leaf cert's SHA-256 DER fingerprint matches the x5t#S256 value from the JWT cnf claim."""
