@@ -1,0 +1,66 @@
+import logging
+from typing import Any, Literal
+
+from requests import HTTPError, Response, request
+from requests.exceptions import ConnectionError, Timeout
+
+logger = logging.getLogger(__name__)
+
+
+class HttpService:
+    def __init__(
+        self,
+        endpoint: str,
+        timeout: int,
+        mtls_cert: str | None,
+        mtls_key: str | None,
+        verify_ca: str | bool = True,
+    ):
+        self._endpoint = endpoint
+        self._timeout = timeout
+        self._mtls_cert = mtls_cert
+        self._mtls_key = mtls_key
+        self._verify_ca = verify_ca
+
+    def server_healthy(self, sub_route: str = "") -> bool:
+        try:
+            response = self.do_request(method="GET", sub_route=sub_route)
+            response.raise_for_status()
+        except Exception:
+            logger.exception("Health check failed")
+            return False
+        return True
+
+    def do_request(
+        self,
+        method: Literal["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
+        sub_route: str = "",
+        json: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, Any] | None = None,
+    ) -> Response:
+        try:
+            cert = (self._mtls_cert, self._mtls_key) if self._mtls_cert and self._mtls_key else None
+
+            url = f"{self._endpoint}/{sub_route}" if sub_route else self._endpoint
+
+            response = request(
+                method=method,
+                url=url,
+                params=params,
+                headers=headers,
+                json=json,
+                data=data,
+                timeout=self._timeout,
+                cert=cert,
+                verify=self._verify_ca,
+            )
+
+            return response
+        except (ConnectionError, Timeout) as e:
+            logger.exception("Request failed")
+            raise e
+        except HTTPError as e:
+            logger.exception("HTTP error occurred")
+            raise e
