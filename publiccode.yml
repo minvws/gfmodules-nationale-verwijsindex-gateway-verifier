@@ -1,0 +1,67 @@
+publiccodeYmlVersion: "0.5"
+name: Nationale Verwijsindex Gateway Verifier
+url: https://github.com/minvws/gfmodules-nationale-verwijsindex-gateway-verifier
+platforms:
+  - web
+categories:
+  - application-development
+developmentStatus: development
+softwareType: standalone/backend
+intendedAudience:
+  countries:
+    - NL
+  scope:
+    - government
+    - healthcare
+
+description:
+  nl:
+    shortDescription: >-
+      Gateway verificatieservice voor de NVI die inkomende verzoeken
+      verifieert op basis van OIN-identiteit via mTLS en JWT.
+    longDescription: |
+      De Nationale Verwijsindex Gateway Verifier is onderdeel van het
+      'Generieke Functies, lokalisatie en addressering' project van het
+      Ministerie van Volksgezondheid, Welzijn en Sport. De FastAPI-service
+      verifieert inkomende gateway-verzoeken op basis van OIN-identiteit. De
+      service valideert zowel de clientcertificaatketen uit de
+      X-Forwarded-Tls-Client-Cert header als de bearer JWT uit de
+      Authorization header. Na succesvolle validatie retourneert de service
+      genormaliseerde identiteitsheaders en kan het verzoek optioneel worden
+      doorgezet naar een geconfigureerde backend URL.
+    features:
+      - Verificatie van mTLS-clientcertificaten
+      - Validatie van bearer JWT-tokens
+      - OIN-extractie uit leafcertificaat
+  en:
+    shortDescription: >-
+      Gateway verification service for the NVI that verifies incoming
+      requests based on OIN identity via mTLS and JWT.
+    longDescription: |
+      The Nationale Verwijsindex Gateway Verifier is part of the 'Generieke
+      Functies, lokalisatie en addressering' project of the Ministry of
+      Health, Welfare and Sport. The FastAPI service verifies incoming
+      gateway requests based on OIN identity. The service validates both the
+      client certificate chain from the X-Forwarded-Tls-Client-Cert header
+      and the bearer JWT from the Authorization header. After successful
+      validation, the service returns normalized identity headers and can
+      optionally proxy the request to a configured backend URL.
+    features:
+      - Verification of mTLS client certificates
+      - Validation of bearer JWT tokens
+      - OIN extraction from leaf certificate
+
+legal:
+  license: EUPL-1.2
+  mainCopyrightOwner: Ministerie van Volksgezondheid, Welzijn en Sport
+
+maintenance:
+  type: internal
+  contacts:
+    - name: irealisatie.nl
+      email: helpdesk@irealisatie.nl
+
+localisation:
+  localisationReady: false
+  availableLanguages:
+    - nl
