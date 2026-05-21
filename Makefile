@@ -40,10 +40,10 @@ safety-check: ## Check for security vulnerabilities
 
 
 spelling-check: ## Check spelling mistakes
-	$(RUN_PREFIX) codespell . --skip="./app/data.py"
+	$(RUN_PREFIX) codespell . --skip="./app/data.py" --skip="./publiccode.yml"
 
 spelling-fix: ## Fix spelling mistakes
-	$(RUN_PREFIX) codespell . --write-changes --interactive=3  --skip="./app/data.py"
+	$(RUN_PREFIX) codespell . --write-changes --interactive=3  --skip="./app/data.py" --skip="./publiccode.yml"
 
 test: ## Runs automated tests
 	$(RUN_PREFIX) pytest --cov --cov-report=term --cov-report=xml
