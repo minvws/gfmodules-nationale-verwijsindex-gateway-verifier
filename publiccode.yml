@@ -1,5 +1,5 @@
 publiccodeYmlVersion: "0.5"
-name: Nationale Verwijsindex Gateway Verifier
+name: Generieke Functies Nationale Verwijsindex Gateway Verifier
 url: https://github.com/minvws/gfmodules-nationale-verwijsindex-gateway-verifier
 platforms:
   - web
