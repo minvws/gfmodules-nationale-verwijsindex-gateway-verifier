@@ -1,98 +1,134 @@
 # syntax=docker/dockerfile:1
+# syntax directive is used to enable Docker BuildKit
 
 ARG PYTHON_VERSION=3.14
 
 FROM python:${PYTHON_VERSION}-slim AS base
 
 ARG PROJECT_DIR="/src"
+ARG VIRTUAL_ENV_PATH="/opt/app/docker-venv"
 ARG APP_USER="app"
 ARG APP_GROUP="app"
-ARG NEW_UID=1000
-ARG NEW_GID=1000
+ARG NEW_UID
+ARG NEW_GID
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-  PYTHONUNBUFFERED=1 \
-  POETRY_VERSION=2.3.3
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    POETRY_VERSION=2.3.4
 
 # Create a non-privileged user that the app will run under.
 RUN groupadd --system ${APP_GROUP} --gid=${NEW_GID} && \
-  adduser \
-  --disabled-password \
-  --gecos "" \
-  --uid ${NEW_UID} \
-  --gid ${NEW_GID} \
-  ${APP_USER}
+    adduser \
+        --disabled-password \
+        --gecos "" \
+        --uid ${NEW_UID} \
+        --gid ${NEW_GID} \
+        ${APP_USER}
 
-# Builder stage for compilation and dependencies
-FROM base AS builder
+# Runtime-only system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl \
+        libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR ${PROJECT_DIR}
+
+# Builder base stage for compilation and dependency installation
+FROM base AS builder-base
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-  --mount=type=cache,target=/var/lib/apt,sharing=locked \
-  apt-get update && \
-  apt-get install -y --no-install-recommends \
-  git \
-  curl \
-  ca-certificates \
-  pkg-config \
-  libssl-dev \
-  libsodium-dev \
-  build-essential \
-  swig \
-  && rm -rf /var/lib/apt/lists/*
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        git \
+        pkg-config \
+        libssl-dev \
+        build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install poetry
+# Create virtualenv used by runtime stages
 RUN --mount=type=cache,target=/root/.cache/pip \
-  pip install --upgrade pip && \
-  pip install poetry==${POETRY_VERSION}
+    python -m venv ${VIRTUAL_ENV_PATH}
 
-# Install Python dependencies
+# Install poetry globally for builder stages
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip && \
+    pip install poetry==${POETRY_VERSION}
+
+# Install Python dependencies into a virtualenv
 WORKDIR ${PROJECT_DIR}
 COPY ./pyproject.toml ./poetry.lock ./
 
-ENV POETRY_CACHE_DIR=/root/.cache/poetry \
-  POETRY_VIRTUALENVS_CREATE=false
+ENV POETRY_CACHE_DIR=/tmp/poetry-cache \
+    POETRY_VIRTUALENVS_CREATE=false
 
-RUN --mount=type=cache,target=/root/.cache/poetry \
-  poetry install --no-root --no-interaction --only main
+# Production dependencies builder (main deps only)
+FROM builder-base AS builder-runtime
 
-# Final stage
-FROM base AS final
+ARG VIRTUAL_ENV_PATH
+ENV VIRTUAL_ENV="${VIRTUAL_ENV_PATH}"
+ENV PATH="${VIRTUAL_ENV}/bin:$PATH"
 
-ARG PYTHON_VERSION
+RUN --mount=type=cache,target=${POETRY_CACHE_DIR} \
+    poetry install --no-root --no-interaction --only main
 
-# Install only runtime dependencies
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-  --mount=type=cache,target=/var/lib/apt,sharing=locked \
-  apt-get update && \
-  apt-get install -y --no-install-recommends \
-  openssl \
-  curl \
-  libssl3 \
-  gettext-base \
-  && rm -rf /var/lib/apt/lists/*
+# Development dependencies builder (full deps, poetry available)
+FROM builder-base AS builder-dev
 
-WORKDIR ${PROJECT_DIR}
+ARG VIRTUAL_ENV_PATH
+ENV VIRTUAL_ENV="${VIRTUAL_ENV_PATH}"
+ENV PATH="${VIRTUAL_ENV}/bin:$PATH"
 
-# Copy Python packages
-COPY --chown=${APP_USER}:${APP_GROUP} --from=builder /usr/local/lib/python${PYTHON_VERSION}/site-packages /usr/local/lib/python${PYTHON_VERSION}/site-packages
+RUN --mount=type=cache,target=${POETRY_CACHE_DIR} \
+    poetry install --no-root --no-interaction
 
-# Copy application
-COPY --chown=${APP_USER}:${APP_GROUP} . ${PROJECT_DIR}
+# Production runtime stage
+FROM base AS runtime
 
-# Copy and set permissions on entrypoint scripts
+ARG VIRTUAL_ENV_PATH
+
+# Reuse the same virtualenv path from builder in runtime
+ENV VIRTUAL_ENV="${VIRTUAL_ENV_PATH}"
+ENV PATH="${VIRTUAL_ENV}/bin:$PATH" \
+    PYTHONPATH="${PROJECT_DIR}"
+
+# Copy only the virtualenv — no pip, no build tools
+COPY --from=builder-runtime --chown=${APP_USER}:${APP_GROUP} ${VIRTUAL_ENV} ${VIRTUAL_ENV}
+
+# Copy only what the app needs at runtime (no tests, docs, CI artifacts, etc.)
+COPY --chown=${APP_USER}:${APP_GROUP} app/ /src/app/
+COPY --chown=${APP_USER}:${APP_GROUP} app.conf.example /src/
+
+# version.json is generated from build args so CI workspace artifacts never leak in
+ARG RELEASE_VERSION=dev
+ARG GIT_SHA=unknown
+RUN echo "{\"version\": \"${RELEASE_VERSION}\", \"git_ref\": \"${GIT_SHA}\"}" > /src/version.json \
+    && chown ${APP_USER}:${APP_GROUP} /src/version.json
+
 COPY --chmod=755 ./docker/init-standalone.sh /usr/local/bin/
 COPY --chmod=755 ./docker/init.sh /usr/local/bin/
 
 ARG standalone=false
 
 RUN if [ "$standalone" = "true" ] ; then \
-  ln -sf /usr/local/bin/init-standalone.sh /docker-entrypoint.sh; \
+    ln -sf /usr/local/bin/init-standalone.sh /docker-entrypoint.sh; \
   else \
-  ln -sf /usr/local/bin/init.sh /docker-entrypoint.sh ; \
+    ln -sf /usr/local/bin/init.sh /docker-entrypoint.sh ; \
   fi
 
 USER ${APP_USER}
 
-ENV PYTHONPATH=${PROJECT_DIR}
+EXPOSE 8503
+WORKDIR ${PROJECT_DIR}
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
+
+# Development runtime stage (extends production runtime)
+FROM runtime AS dev
+COPY --from=builder-dev --chown=${APP_USER}:${APP_GROUP} ${VIRTUAL_ENV} ${VIRTUAL_ENV}
+RUN ${VIRTUAL_ENV}/bin/pip install poetry==${POETRY_VERSION}
+
+# Backward-compatible default final target
+FROM runtime AS final
