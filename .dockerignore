@@ -1,0 +1,14 @@
+# Exclude everything by default; only allow what is explicitly listed below.
+*
+.*
+
+# App runtime files
+!app/
+!app.conf.example
+
+# Init scripts (copied from docker/ into /usr/local/bin by Dockerfile)
+!docker/
+
+# Dependency manifests (for builder stage)
+!pyproject.toml
+!poetry.lock
