@@ -64,4 +64,4 @@ maintenance:
 localisation:
   localisationReady: false
   availableLanguages:
-    - nl
+    - en
