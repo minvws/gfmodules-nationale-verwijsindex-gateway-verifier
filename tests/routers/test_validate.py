@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 from app.config import (
     Config,
     ConfigApp,
-    ConfigDatabase,
     ConfigKongProxy,
     ConfigOin,
     ConfigStats,
@@ -18,8 +17,8 @@ from app.config import (
     reset_config,
     set_config,
 )
-from app.container import get_ca_service, get_healthcare_provider_service, get_jwt_service
-from app.db.models.oin import OinNumber
+from app.container import get_ca_service, get_jwt_service
+from app.models.oin import OinNumber
 from app.routers.validator import router
 from app.services.jwt import JwtException
 
@@ -37,7 +36,6 @@ def test_config():
             audience=["test-audience"],
             jwks_url="http://localhost/jwks",
         ),
-        database=ConfigDatabase(dsn="sqlite:///:memory:", retry_backoff=[]),
         telemetry=ConfigTelemetry(endpoint=None, service_name=None, tracer_name=None),
         stats=ConfigStats(host=None, port=None, module_name=None),
         uvicorn=ConfigUvicorn(ssl_base_dir=None, ssl_cert_file=None, ssl_key_file=None),
@@ -52,8 +50,6 @@ def test_config():
 def ca_service():
     mock = MagicMock()
     mock.is_oin_certificate.return_value = (True, OinNumber(OIN))
-    mock.is_uzi_certificate.return_value = (False, None)
-    mock.is_ldn_certificate.return_value = False
     mock.check_cert_fingerprint.return_value = True
     return mock
 
@@ -94,19 +90,11 @@ def make_entity(**kwargs: object) -> MagicMock:
 
 
 @pytest.fixture
-def healthcare_service():
-    mock = MagicMock()
-    mock.find.return_value = [make_entity()]
-    return mock
-
-
-@pytest.fixture
-def client(ca_service, jwt_service, healthcare_service):
+def client(ca_service, jwt_service):
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_ca_service] = lambda: ca_service
     app.dependency_overrides[get_jwt_service] = lambda: jwt_service
-    app.dependency_overrides[get_healthcare_provider_service] = lambda: healthcare_service
     return TestClient(app)
 
 
@@ -203,51 +191,3 @@ class TestCertificateFingerprint:
         ca_service.check_cert_fingerprint.assert_called_once()
         call_args = ca_service.check_cert_fingerprint.call_args
         assert call_args[0][1] == "abc123thumbprint"
-
-
-class TestHealthcareProviderLookup:
-    def test_match_returns_200_with_x_headers(self, client: TestClient, healthcare_service: MagicMock) -> None:
-        response = client.get("/validate", headers=bearer())
-        assert response.status_code == 200
-        body = response.json()
-        assert body["x-gf-cert-type"] == "OIN"
-        assert body["x-gf-oin"] == OIN
-        assert body["x-gf-ura"] == "00000123"
-        assert body["x-gf-authorized-role"] == "test-role"
-        assert body["x-gf-audience"] == "test-audience"
-        assert body["x-gf-scope"] == "test-scope"
-
-    def test_no_match_returns_404(self, client: TestClient, healthcare_service: MagicMock) -> None:
-        healthcare_service.find.return_value = []
-        response = client.get("/validate", headers=bearer())
-        assert response.status_code == 404
-
-    def test_multiple_matches_returns_400(self, client: TestClient, healthcare_service: MagicMock) -> None:
-        healthcare_service.find.return_value = [make_entity(), make_entity()]
-        response = client.get("/validate", headers=bearer())
-        assert response.status_code == 400
-
-    def test_source_id_header_passed_to_service(
-        self, client: TestClient, healthcare_service: MagicMock, jwt_service: MagicMock
-    ) -> None:
-        token = MagicMock()
-        token.claims = json.dumps(
-            {
-                "oin": OIN,
-                "sub": "00000123",
-                "authorized_role": "test-role",
-                "aud": "test-audience",
-                "scope": "test-scope",
-                "source_id": "my-source",
-                "cnf": {"x5t#S256": "validthumbprint"},
-            }
-        )
-        jwt_service.verify.return_value = token
-        client.get("/validate", headers=bearer())
-        healthcare_service.find.assert_called_once_with(OinNumber(OIN), "my-source")
-
-    def test_missing_source_id_in_jwt_passes_none_to_service(
-        self, client: TestClient, healthcare_service: MagicMock
-    ) -> None:
-        client.get("/validate", headers=bearer())
-        healthcare_service.find.assert_called_once_with(OinNumber(OIN), None)

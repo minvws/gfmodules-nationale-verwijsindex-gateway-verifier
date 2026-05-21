@@ -1,10 +1,11 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-import requests
 from jwcrypto import jwk, jwt
 from jwcrypto.common import JWException
 from jwcrypto.jwt import JWT
+
+from app.services.http_service import HttpService
 
 # Cache time for JWKS
 JWKS_TTL = timedelta(minutes=15)
@@ -17,20 +18,19 @@ class JwtException(Exception):
 
 
 class JWTService:
-    def __init__(
-        self, jwks_url: str, mtls_cert: str | None, mtls_key: str | None, verify_ca: str | bool | None
-    ) -> None:
-        self.jwks_url = jwks_url
+    def __init__(self, jwks_url: str, mtls_cert: str | None, mtls_key: str | None, verify_ca: str | bool) -> None:
         self.jwks_store: jwk.JWKSet | None = None
         self.jwks_ttl: datetime | None = None
-        self._mtls_cert = mtls_cert
-        self._mtls_key = mtls_key
-        self._verify_ca = verify_ca
+        self._http_service = HttpService(
+            jwks_url, timeout=5, mtls_cert=mtls_cert, mtls_key=mtls_key, verify_ca=verify_ca
+        )
+
+    def health_check(self) -> bool:
+        return self._http_service.server_healthy()
 
     def refresh_jwks(self) -> None:
-        logger.debug(f"Requesting new from {self.jwks_url}")
-        cert = (self._mtls_cert, self._mtls_key) if self._mtls_cert and self._mtls_key else None
-        r = requests.get(self.jwks_url, timeout=5, cert=cert, verify=self._verify_ca)
+        logger.debug("Requesting new JWKS")
+        r = self._http_service.do_request(method="GET")
         r.raise_for_status()
         self.jwks_store = jwk.JWKSet.from_json(r.text)
 

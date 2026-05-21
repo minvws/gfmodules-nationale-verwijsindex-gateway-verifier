@@ -3,9 +3,7 @@ import logging
 import inject
 
 from app.config import Config, get_config
-from app.db.db import Database
 from app.services.ca import CaService
-from app.services.healthcare_provider import HealthcareProviderService
 from app.services.jwt import JWTService
 
 logger = logging.getLogger(__name__)
@@ -14,12 +12,6 @@ logger = logging.getLogger(__name__)
 def container_config(binder: inject.Binder) -> None:
     config = get_config()
     binder.bind(Config, config)
-
-    db = Database(config_database=config.database)
-    binder.bind(Database, db)
-
-    healthcare_provider_service = HealthcareProviderService(db)
-    binder.bind(HealthcareProviderService, healthcare_provider_service)
 
     ca_service = CaService([config.oin.oin_ca_path])
     binder.bind(CaService, ca_service)
@@ -31,14 +23,6 @@ def container_config(binder: inject.Binder) -> None:
         config.oin.verify_ca,
     )
     binder.bind(JWTService, jwt_service)
-
-
-def get_database() -> Database:
-    return inject.instance(Database)
-
-
-def get_healthcare_provider_service() -> HealthcareProviderService:
-    return inject.instance(HealthcareProviderService)
 
 
 def get_ca_service() -> CaService:

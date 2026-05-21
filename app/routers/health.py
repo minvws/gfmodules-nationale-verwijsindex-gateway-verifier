@@ -1,10 +1,11 @@
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
-from app.container import get_database
-from app.db.db import Database
+from app.container import get_jwt_service
+from app.services.jwt import JWTService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -29,7 +30,6 @@ def ok_or_error(value: bool) -> str:
                             "summary": "All services healthy",
                             "value": {
                                 "status": "ok",
-                                "components": {"database": "ok"},
                             },
                         },
                     }
@@ -46,7 +46,6 @@ def ok_or_error(value: bool) -> str:
                             "summary": "Some services unhealthy",
                             "value": {
                                 "status": "error",
-                                "components": {"database": "error"},
                             },
                         },
                     }
@@ -56,17 +55,18 @@ def ok_or_error(value: bool) -> str:
     },
     tags=["Health"],
 )
-def health(db: Database = Depends(get_database)) -> JSONResponse:
+def health(jwt_service: Annotated[JWTService, Depends(get_jwt_service)]) -> JSONResponse:
     logger.info("Checking database health")
 
     components = {
-        "database": ok_or_error(db.is_healthy()),
+        "jwks_url": ok_or_error(jwt_service.health_check()),
     }
-    healthy = ok_or_error(all(value == "ok" for value in components.values()))
+    healthy = ok_or_error(all(components.values()))
     content = {"status": healthy, "components": components}
     if healthy == "ok":
         return JSONResponse(content=content)
-    logger.warning(f"Some components unhealthy: {components}")
+    unhealthy = [name for name, status in components.items() if status != "ok"]
+    logger.warning(f"Unhealthy components: {', '.join(unhealthy)}")
     return JSONResponse(
         status_code=503,
         content=content,

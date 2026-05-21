@@ -14,7 +14,7 @@ services:
     ports:
       - 8503:8503
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8502/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8503/health"]
       interval: 5s
       timeout: 10s
       retries: 5
