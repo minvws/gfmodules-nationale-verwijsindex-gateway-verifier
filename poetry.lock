@@ -2168,7 +2168,7 @@ version = "2.33.0.20260518"
 description = "Typing stubs for requests"
 optional = false
 python-versions = ">=3.10"
-groups = ["main"]
+groups = ["dev"]
 files = [
     {file = "types_requests-2.33.0.20260518-py3-none-any.whl", hash = "sha256:626d697d1adaaff76e2044dc8c5c051d8f21abc157bdfe204a75558076fe0bf0"},
     {file = "types_requests-2.33.0.20260518.tar.gz", hash = "sha256:df7bd3bfe0ca8402dfb841e7d9be714bb5578203283d66d7dc4ef69343449a5e"},
@@ -2355,4 +2355,4 @@ type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "733c2228089d78ebe7938f166dc846370a1baa17e30588334d909a48719f0d36"
+content-hash = "bdd57c748a66b8c90cefe1b352dbd7184b558c6942a864419ac8fb5ffea24b27"
