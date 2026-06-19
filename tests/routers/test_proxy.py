@@ -28,7 +28,6 @@ VALID_CLAIMS = json.dumps(
     {
         "oin": OIN,
         "sub": "00000123",
-        "authorized_role": "test-role",
         "aud": "test-audience",
         "scope": "test-scope",
         "cnf": {"x5t#S256": "validthumbprint"},
