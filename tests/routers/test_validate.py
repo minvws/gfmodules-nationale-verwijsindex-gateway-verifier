@@ -62,7 +62,6 @@ def jwt_service():
         {
             "oin": OIN,
             "sub": "00000123",
-            "authorized_role": "test-role",
             "aud": "test-audience",
             "scope": "test-scope",
             "cnf": {"x5t#S256": "validthumbprint"},
@@ -138,7 +137,11 @@ class TestOINMatching:
     def test_jwt_oin_mismatch_with_cert_oin_returns_400(self, client: TestClient, jwt_service: MagicMock) -> None:
         token = MagicMock()
         token.claims = json.dumps(
-            {"oin": OTHER_OIN, "authorized_role": "test-role", "aud": "test-audience", "cnf": {"x5t#S256": "t"}}
+            {
+                "oin": OTHER_OIN,
+                "aud": "test-audience",
+                "cnf": {"x5t#S256": "t"},
+            }
         )
         jwt_service.verify.return_value = token
 
@@ -159,7 +162,11 @@ class TestCertificateFingerprint:
     def test_missing_cnf_claim_returns_400(self, client: TestClient, jwt_service: MagicMock) -> None:
         token = MagicMock()
         token.claims = json.dumps(
-            {"oin": OIN, "sub": "00000123", "authorized_role": "test-role", "aud": "test-audience"}
+            {
+                "oin": OIN,
+                "sub": "00000123",
+                "aud": "test-audience",
+            }
         )
         jwt_service.verify.return_value = token
         response = client.get("/validate", headers=bearer())
@@ -180,7 +187,6 @@ class TestCertificateFingerprint:
             {
                 "oin": OIN,
                 "sub": "00000123",
-                "authorized_role": "test-role",
                 "aud": "test-audience",
                 "scope": "test-scope",
                 "cnf": {"x5t#S256": "abc123thumbprint"},

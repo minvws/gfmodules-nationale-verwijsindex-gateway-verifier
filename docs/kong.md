@@ -17,7 +17,7 @@ forwarding it to your backend.
    - Checks that the OIN in the JWT matches the OIN in the certificate
 3. If validation fails, the error response is returned directly to the client (no forwarding).
 4. If validation succeeds, the identity fields from the validation result are added as HTTP headers (`X-Oin-Number`, 
-   `X-Ura-Number`, `X-Source-Id`, `X-Authorized-Role`, `X-Audience`).
+   `X-Ura-Number`, `X-Source-Id`, `X-Audience`).
 5. The original request body is forwarded to `kong_proxy.url` using the same HTTP method, with those headers attached.
 6. The backend response is returned as-is to the client.
 
@@ -59,7 +59,7 @@ curl -X POST http://localhost:8503/proxy \
   -d '{"example": "body"}'
 ```
 
-The response from httpbin will show the `X-Oin-Number`, `X-Ura-Number`, `X-Source-Id`, `X-Authorized-Role`, and 
+The response from httpbin will show the `X-Oin-Number`, `X-Ura-Number`, `X-Source-Id`, and 
 `X-Audience` headers that were injected by the gateway.
 
 To test with a specific source ID, add the `X-Source-Id` header:
