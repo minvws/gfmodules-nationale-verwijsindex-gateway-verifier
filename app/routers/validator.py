@@ -86,7 +86,6 @@ def _validate_oin(
         "x-gf-cert-type": "OIN",
         "x-gf-audience": _aud_str(claims.get("aud")),
         "x-gf-scope": claims.get("scope", ""),
-        "x-gf-authorized-role": claims.get("authorized_role", ""),
         "x-gf-sub": claims.get("sub"),
     }
     if claims.get("oin"):

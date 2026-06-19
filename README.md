@@ -47,7 +47,6 @@ On success, identity headers are returned (and used by `/proxy`):
 - `x-gf-cert-type`
 - `x-gf-audience`
 - `x-gf-scope`
-- `x-gf-authorized-role`
 - `x-gf-oin` (if present in token)
 - `x-gf-source-id` (if present in token)
 
