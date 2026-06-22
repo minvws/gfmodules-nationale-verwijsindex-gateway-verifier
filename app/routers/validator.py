@@ -74,7 +74,7 @@ def _validate_oin(
     if err := _check_cert_fingerprint(claims, request, ca_service):
         return err
 
-    jwt_oin = claims.get("oin") or claims.get("oin_number")
+    jwt_oin = claims.get("oin") or claims.get("sub")
     if not jwt_oin:
         logger.error("Missing OIN claim in token")
         return Response("Missing OIN claim in token", status_code=400)
