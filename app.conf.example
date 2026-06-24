@@ -2,6 +2,22 @@
 # Loglevel can be one of: debug, info, warning, error, critical
 loglevel=debug
 
+[logging]
+# All keys are optional. When a syslog path is omitted that stream is simply not emitted.
+# Syslog addresses in host:port format (UDP).
+# Application logs (stroom 2) — also go to stdout.
+# app_path = syslog:5514
+# Security events (SIEM, stroom 3).
+# siem_path = syslog:5515
+# Logs for public inspection (stroom 1).
+# public_inspect_path = syslog:5516
+# Logs for debugging purposes (unfiltered, includes traces).
+# debug_path = syslog:5517
+# Include exception/stack traces in JSON logs.
+include_traces = False
+# Display human-readable debug logs in the console instead of JSON.
+debug_logs_in_console = False
+
 [oin]
 # Path to the trusted OIN CA certificate, used to validate client certificates issued by this CA or its intermediates and containing an OIN in subject.serialNumber.
 oin_ca_path=secrets/dummy-oin-server-ca.crt

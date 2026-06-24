@@ -43,14 +43,18 @@ class CaService:
         oin = self._extract_oin_from_cert(certs[0])
         return (oin is not None, oin)
 
-    def check_cert_fingerprint(self, request: Request, thumbprint: str) -> bool:
-        """Verifies the leaf cert's SHA-256 DER fingerprint matches the x5t#S256 value from the JWT cnf claim."""
+    def get_presented_thumbprint(self, request: Request) -> str | None:
+        """Returns the SHA-256 DER thumbprint (x5t#S256 form) of the presented leaf cert, if any."""
         certs = self.get_certs(request)
         if not certs:
-            return False
+            return None
         der = crypto.dump_certificate(crypto.FILETYPE_ASN1, certs[0])
-        computed = base64.urlsafe_b64encode(hashlib.sha256(der).digest()).rstrip(b"=").decode("ascii")
-        return computed == thumbprint
+        return base64.urlsafe_b64encode(hashlib.sha256(der).digest()).rstrip(b"=").decode("ascii")
+
+    def check_cert_fingerprint(self, request: Request, thumbprint: str) -> bool:
+        """Verifies the leaf cert's SHA-256 DER fingerprint matches the x5t#S256 value from the JWT cnf claim."""
+        computed = self.get_presented_thumbprint(request)
+        return computed is not None and computed == thumbprint
 
     @staticmethod
     def _extract_oin_from_cert(cert: crypto.X509) -> OinNumber | None:

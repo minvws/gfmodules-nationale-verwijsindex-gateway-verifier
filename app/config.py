@@ -26,6 +26,15 @@ class ConfigApp(BaseModel):
     loglevel: LogLevel = Field(default=LogLevel.info)
 
 
+class ConfigLogging(BaseModel):
+    app_path: str | None = Field(default=None)
+    siem_path: str | None = Field(default=None)
+    public_inspect_path: str | None = Field(default=None)
+    debug_path: str | None = Field(default=None)
+    include_traces: bool = Field(default=True)
+    debug_logs_in_console: bool = Field(default=False)
+
+
 class ConfigOin(BaseModel):
     oin_ca_path: str
     issuer: str
@@ -86,6 +95,7 @@ class ConfigKongProxy(BaseModel):
 
 class Config(BaseModel):
     app: ConfigApp
+    logging: ConfigLogging = Field(default_factory=ConfigLogging)
     telemetry: ConfigTelemetry
     stats: ConfigStats
     uvicorn: ConfigUvicorn

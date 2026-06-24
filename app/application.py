@@ -1,4 +1,5 @@
 import logging
+from logging.config import dictConfig
 from typing import Any
 
 import uvicorn
@@ -6,6 +7,8 @@ from fastapi import FastAPI
 
 from app import container
 from app.config import get_config
+from app.logging.config_builder import LogConfigBuilder
+from app.logging.middleware import RequestContextMiddleware
 from app.middleware.stats import StatsdMiddleware
 from app.routers.default import router as default_router
 from app.routers.health import router as health_router
@@ -48,12 +51,15 @@ def create_fastapi_app() -> FastAPI:
 
 def setup_logging() -> None:
     config = get_config()
-    if config.app.loglevel.upper() not in logging.getLevelNamesMapping():
-        raise ValueError(f"Invalid loglevel {config.app.loglevel.upper()}")
-    logging.basicConfig(
-        level=logging.getLevelNamesMapping()[config.app.loglevel.upper()],
-        datefmt="%m/%d/%Y %I:%M:%S %p",
-    )
+    loglevel = config.app.loglevel.upper()
+    if loglevel not in logging.getLevelNamesMapping():
+        raise ValueError(f"Invalid loglevel {loglevel}")
+
+    log_config = LogConfigBuilder(
+        loglevel=loglevel,
+        logging_config=config.logging,
+    ).build()
+    dictConfig(log_config)
 
 
 def setup_fastapi() -> FastAPI:
@@ -78,5 +84,7 @@ def setup_fastapi() -> FastAPI:
 
     if config.stats.enabled:
         fastapi.add_middleware(StatsdMiddleware, module_name=config.stats.module_name or "default")
+
+    fastapi.add_middleware(RequestContextMiddleware)
 
     return fastapi
