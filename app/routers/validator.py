@@ -176,6 +176,8 @@ def _validate_oin(
         headers["x-gf-oin"] = str(claims["oin"])
     if claims.get("source_id"):
         headers["x-gf-source-id"] = str(claims["source_id"])
+    if claims.get("organization_name"):
+        headers["x-gf-organization-name"] = str(claims["organization_name"])
 
     return JSONResponse(headers, status_code=200)
 
