@@ -172,7 +172,12 @@ def _validate_oin(
         "x-gf-scope": claims.get("scope", ""),
         "x-gf-sub": claims.get("sub"),
     }
-    if claims.get("oin"):
+    # check if PRS claims are present
+    if claims.get("org_oin") is not None:
+        # subject is the oin
+        headers["x-gf-oin"] = str(claims["org_oin"])
+    else:
+        # otherwise default to NVI
         headers["x-gf-oin"] = str(claims["oin"])
     if claims.get("source_id"):
         headers["x-gf-source-id"] = str(claims["source_id"])
