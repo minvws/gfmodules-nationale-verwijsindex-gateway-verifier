@@ -8,7 +8,7 @@ from typing import Any, Iterator
 import pytest
 
 from app.logging.context import endpoint_var, ip_var, method_var, request_id_var
-from app.logging.events import Log
+from app.logging.events import NviLog, PrsLog
 from app.logging.filters import AppFilter, LoggingStreams, SiemFilter
 from app.logging.formatter import JsonFormatter
 
@@ -54,9 +54,9 @@ def test_binding_mismatch_withholds_endpoint_from_siem(
     streams: tuple[logging.Logger, io.StringIO, io.StringIO],
 ) -> None:
     logger, app_buf, siem_buf = streams
-    Log.event(
+    NviLog.event(
         logger,
-        Log.MTLS_BINDING_MISMATCH,
+        NviLog.MTLS_BINDING_MISMATCH,
         "mismatch",
         jwt_ura="00000123",
         cert_thumbprint_jwt="abc",
@@ -82,9 +82,9 @@ def test_authorization_mismatch_drops_resource_id_and_method_from_siem(
     streams: tuple[logging.Logger, io.StringIO, io.StringIO],
 ) -> None:
     logger, app_buf, siem_buf = streams
-    Log.event(
+    NviLog.event(
         logger,
-        Log.URA_AUTHORIZATION_MISMATCH,
+        NviLog.URA_AUTHORIZATION_MISMATCH,
         "mismatch",
         jwt_ura="00000123",
         resource_ura="00000001",
@@ -109,9 +109,9 @@ def test_success_keeps_thumbprint_prefix_only_in_app(
     streams: tuple[logging.Logger, io.StringIO, io.StringIO],
 ) -> None:
     logger, app_buf, siem_buf = streams
-    Log.event(
+    NviLog.event(
         logger,
-        Log.AUTHENTICATION_SUCCESS,
+        NviLog.AUTHENTICATION_SUCCESS,
         "ok",
         ura_number="00000123",
         cert_thumbprint_prefix="validthu",
@@ -128,3 +128,55 @@ def test_success_keeps_thumbprint_prefix_only_in_app(
         assert msg["ura_number"] == "00000123"
         assert msg["scope"] == "test-scope"
         assert msg["endpoint"] == "/validate"
+
+
+def test_prs_success_keeps_thumbprint_prefix_only_in_app(
+    streams: tuple[logging.Logger, io.StringIO, io.StringIO],
+) -> None:
+    logger, app_buf, siem_buf = streams
+    PrsLog.event(
+        logger,
+        PrsLog.AUTHENTICATION_SUCCESS,
+        "ok",
+        handelende_oin="00000001123456700000",
+        ura_number="00000123",  # NVI field, dropped by the PRS allow-lists
+        cert_thumbprint_prefix="validthu",
+        scope="test-scope",
+    )
+
+    app_msg = _messages(app_buf)[0]
+    siem_msg = _messages(siem_buf)[0]
+
+    assert app_msg["cert_thumbprint_prefix"] == "validthu"
+    assert "cert_thumbprint_prefix" not in siem_msg  # not in SIEM allow-list for PRS-AUTH-004
+    # oin/scope/endpoint/method in both, NVI-only fields in neither
+    for msg in (app_msg, siem_msg):
+        assert msg["handelende_oin"] == "00000001123456700000"
+        assert msg["scope"] == "test-scope"
+        assert msg["endpoint"] == "/validate"
+        assert msg["method"] == "GET"
+        assert "ura_number" not in msg
+
+
+def test_prs_token_binding_drops_failure_reason_from_siem(
+    streams: tuple[logging.Logger, io.StringIO, io.StringIO],
+) -> None:
+    logger, app_buf, siem_buf = streams
+    PrsLog.event(
+        logger,
+        PrsLog.TOKEN_BINDING_INVALID,
+        "missing cnf claim",
+        handelende_oin="00000001123456700000",
+        failure_reason="missing_cnf_claim",
+        cert_thumbprint_presented="presentedthumb",  # NVI 002 field, not in PRS-AUTH-007
+    )
+
+    app_msg = _messages(app_buf)[0]
+    siem_msg = _messages(siem_buf)[0]
+
+    assert app_msg["failure_reason"] == "missing_cnf_claim"
+    assert "failure_reason" not in siem_msg  # not in SIEM allow-list for PRS-AUTH-007
+    for msg in (app_msg, siem_msg):
+        assert msg["handelende_oin"] == "00000001123456700000"
+        assert msg["endpoint"] == "/validate"
+        assert "cert_thumbprint_presented" not in msg
