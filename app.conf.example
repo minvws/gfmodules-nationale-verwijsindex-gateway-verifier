@@ -3,6 +3,8 @@
 loglevel=debug
 
 [logging]
+# Log type can be one of: nvi or prs, depending on which system is being used.
+# application_log_type=nvi
 # All keys are optional. When a syslog path is omitted that stream is simply not emitted.
 # Syslog addresses in host:port format (UDP).
 # Application logs (stroom 2) — also go to stdout.

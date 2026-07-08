@@ -26,7 +26,15 @@ class ConfigApp(BaseModel):
     loglevel: LogLevel = Field(default=LogLevel.info)
 
 
+class ApplicationLogType(str, Enum):
+    nvi = "nvi"
+    prs = "prs"
+
+
 class ConfigLogging(BaseModel):
+    # Which system's audit events are emitted (the verifier can front NVI or PRS,
+    # and each has its own event IDs and field specs).
+    application_log_type: ApplicationLogType = Field(default=ApplicationLogType.nvi)
     app_path: str | None = Field(default=None)
     siem_path: str | None = Field(default=None)
     public_inspect_path: str | None = Field(default=None)
