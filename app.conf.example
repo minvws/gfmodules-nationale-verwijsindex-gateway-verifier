@@ -5,16 +5,14 @@ loglevel=debug
 [logging]
 # Log type can be one of: nvi or prs, depending on which system is being used.
 # application_log_type=nvi
-# All keys are optional. When a syslog path is omitted that stream is simply not emitted.
-# Syslog addresses in host:port format (UDP).
-# Application logs (stroom 2) — also go to stdout.
-# app_path = syslog:5514
-# Security events (SIEM, stroom 3).
-# siem_path = syslog:5515
-# Logs for public inspection (stroom 1).
-# public_inspect_path = syslog:5516
-# Logs for debugging purposes (unfiltered, includes traces).
-# debug_path = syslog:5517
+# All keys are optional. When syslog_path is omitted, logs only go to stdout.
+# Single syslog channel in host:port format (UDP). All streams (app, siem,
+# public_inspect, debug) are sent here; each JSON record carries a stream_id
+# field so the log server can tell them apart.
+# syslog_path = syslog:5514
+# Identifies this application in the JSON records (application_id field),
+# so the log server can tell apart applications sharing the channel.
+application_id = nationale-verwijsindex-gateway-verifier
 # Include exception/stack traces in JSON logs.
 include_traces = False
 # Display human-readable debug logs in the console instead of JSON.
