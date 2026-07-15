@@ -35,10 +35,8 @@ class ConfigLogging(BaseModel):
     # Which system's audit events are emitted (the verifier can front NVI or PRS,
     # and each has its own event IDs and field specs).
     application_log_type: ApplicationLogType = Field(default=ApplicationLogType.nvi)
-    app_path: str | None = Field(default=None)
-    siem_path: str | None = Field(default=None)
-    public_inspect_path: str | None = Field(default=None)
-    debug_path: str | None = Field(default=None)
+    syslog_path: str | None = Field(default=None)
+    application_id: str | None = Field(default=None)
     include_traces: bool = Field(default=True)
     debug_logs_in_console: bool = Field(default=False)
 
