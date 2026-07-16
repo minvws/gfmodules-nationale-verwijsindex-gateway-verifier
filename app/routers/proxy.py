@@ -6,9 +6,8 @@ import requests as http_requests
 from fastapi import APIRouter, Depends, Request, Response
 
 from app.config import get_config
-from app.container import get_ca_service, get_jwt_service
+from app.container import get_jwt_service
 from app.routers.validator import run_validate
-from app.services.ca import CaService
 from app.services.jwt import JWTService
 
 logger = logging.getLogger(__name__)
@@ -30,7 +29,6 @@ _UNAUTHENTICATED_PATHS = {"health"}
 @router.api_route("/proxy/{upstream_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def proxy(
     request: Request,
-    ca_service: Annotated[CaService, Depends(get_ca_service)],
     jwt_service: Annotated[JWTService, Depends(get_jwt_service)],
     upstream_path: str = "",
 ) -> Response:
@@ -51,7 +49,7 @@ async def proxy(
     # unauthenticated health passthrough (used by upstream health probes).
     identity: dict[str, object] = {}
     if upstream_path not in _UNAUTHENTICATED_PATHS:
-        validate_response = run_validate(request, ca_service, jwt_service)
+        validate_response = run_validate(request, jwt_service)
         if validate_response.status_code != 200:
             return validate_response
         identity = json.loads(bytes(validate_response.body))

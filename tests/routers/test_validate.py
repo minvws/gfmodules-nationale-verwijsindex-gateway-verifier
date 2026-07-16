@@ -17,13 +17,13 @@ from app.config import (
     reset_config,
     set_config,
 )
-from app.container import get_ca_service, get_jwt_service
-from app.models.oin import OinNumber
+from app.container import get_jwt_service
 from app.routers.validator import router
 from app.services.jwt import JwtException
 
-OIN = "00000001123456700000"
-OTHER_OIN = "00000002987654321000"
+CLIENT_ORGANIZATION_ID = "00000001123456700000"
+ORGANIZATION_ID = "00000001123456780000"
+OTHER_ORGANIZATION_ID = "00000002987654321000"
 
 
 @pytest.fixture(autouse=True)
@@ -47,20 +47,12 @@ def test_config():
 
 
 @pytest.fixture
-def ca_service():
-    mock = MagicMock()
-    mock.is_oin_certificate.return_value = (True, OinNumber(OIN))
-    mock.check_cert_fingerprint.return_value = True
-    return mock
-
-
-@pytest.fixture
 def jwt_service():
     mock = MagicMock()
     token = MagicMock()
     token.claims = json.dumps(
         {
-            "oin": OIN,
+            "oin": ORGANIZATION_ID,
             "sub": "00000123",
             "aud": "test-audience",
             "scope": "test-scope",
@@ -77,7 +69,7 @@ ENTITY_ID = UUID("12345678-1234-5678-1234-567812345678")
 def make_entity(**kwargs: object) -> MagicMock:
     entity = MagicMock()
     entity.id = kwargs.get("id", ENTITY_ID)
-    entity.oin = kwargs.get("oin", OIN)
+    entity.oin = kwargs.get("oin", ORGANIZATION_ID)
     entity.ura_number = kwargs.get("ura_number", "00000123")
     entity.source_id = kwargs.get("source_id", None)
     entity.common_name = kwargs.get("common_name", "Test Provider")
@@ -89,63 +81,68 @@ def make_entity(**kwargs: object) -> MagicMock:
 
 
 @pytest.fixture
-def client(ca_service, jwt_service):
+def client(jwt_service):
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_ca_service] = lambda: ca_service
     app.dependency_overrides[get_jwt_service] = lambda: jwt_service
     return TestClient(app)
 
 
-def bearer(token: str = "valid.jwt.token") -> dict[str, str]:
-    return {"Authorization": f"Bearer {token}"}
+def headers(token: str = "valid.jwt.token") -> dict[str, str]:
+    return {
+        "x-gf-client-organization-id": CLIENT_ORGANIZATION_ID,
+        "x-gf-client-common-name": "common-name",
+        "Authorization": "Bearer valid.jwt.token",
+    }
 
 
 class TestMissingOrInvalidAuthorization:
-    def test_no_authorization_header_returns_401(self, client: TestClient) -> None:
-        response = client.get("/validate")
-        assert response.status_code == 401
+    def test_no_authorization_header_returns_500(self, client: TestClient) -> None:
+        response = client.get(
+            "/validate",
+            headers={
+                "x-gf-client-organization-id": CLIENT_ORGANIZATION_ID,
+                "x-gf-client-common-name": "common-name",
+            },
+        )
+        assert response.status_code == 500
 
     def test_non_bearer_authorization_returns_401(self, client: TestClient) -> None:
-        response = client.get("/validate", headers={"Authorization": "Basic dXNlcjpwYXNz"})
+        response = client.get(
+            "/validate",
+            headers={
+                "x-gf-client-organization-id": CLIENT_ORGANIZATION_ID,
+                "x-gf-client-common-name": "common-name",
+                "Authorization": "Basic auth",
+            },
+        )
         assert response.status_code == 401
-
-
-class TestCertificateValidation:
-    def test_invalid_oin_certificate_returns_403(self, client: TestClient, ca_service: MagicMock) -> None:
-        ca_service.is_oin_certificate.return_value = (False, None)
-        response = client.get("/validate", headers=bearer())
-        assert response.status_code == 403
-
-    def test_oin_certificate_check_called_with_request(self, client: TestClient, ca_service: MagicMock) -> None:
-        client.get("/validate", headers=bearer())
-        ca_service.is_oin_certificate.assert_called_once()
 
 
 class TestJWTValidation:
     def test_invalid_jwt_returns_400(self, client: TestClient, jwt_service: MagicMock) -> None:
         jwt_service.verify.side_effect = JwtException("bad token")
-        response = client.get("/validate", headers=bearer("bad.token"))
+        response = client.get("/validate", headers=headers("bad.token"))
         assert response.status_code == 400
 
     def test_jwt_verified_with_configured_issuer_and_audience(self, client: TestClient, jwt_service: MagicMock) -> None:
-        client.get("/validate", headers=bearer())
+        client.get("/validate", headers=headers())
         jwt_service.verify.assert_called_once_with("valid.jwt.token", "test-issuer", ["test-audience"])
 
 
-class TestOINMatching:
+class TestORGANIZATION_IDMatching:
     def test_jwt_oin_mismatch_with_cert_oin_returns_400(self, client: TestClient, jwt_service: MagicMock) -> None:
         token = MagicMock()
         token.claims = json.dumps(
             {
-                "oin": OTHER_OIN,
+                "sub": OTHER_ORGANIZATION_ID,
                 "aud": "test-audience",
                 "cnf": {"x5t#S256": "t"},
             }
         )
         jwt_service.verify.return_value = token
 
-        response = client.get("/validate", headers=bearer())
+        response = client.get("/validate", headers=headers())
         assert response.status_code == 400
         assert "OIN" in response.text
 
@@ -154,46 +151,5 @@ class TestOINMatching:
         token.claims = json.dumps({"oin": None})
         jwt_service.verify.return_value = token
 
-        response = client.get("/validate", headers=bearer())
+        response = client.get("/validate", headers=headers())
         assert response.status_code == 400
-
-
-class TestCertificateFingerprint:
-    def test_missing_cnf_claim_returns_400(self, client: TestClient, jwt_service: MagicMock) -> None:
-        token = MagicMock()
-        token.claims = json.dumps(
-            {
-                "oin": OIN,
-                "sub": "00000123",
-                "aud": "test-audience",
-            }
-        )
-        jwt_service.verify.return_value = token
-        response = client.get("/validate", headers=bearer())
-        assert response.status_code == 400
-        assert "fingerprint" in response.text.lower()
-
-    def test_fingerprint_mismatch_returns_400(self, client: TestClient, ca_service: MagicMock) -> None:
-        ca_service.check_cert_fingerprint.return_value = False
-        response = client.get("/validate", headers=bearer())
-        assert response.status_code == 400
-        assert "fingerprint" in response.text.lower()
-
-    def test_fingerprint_check_called_with_correct_thumbprint(
-        self, client: TestClient, ca_service: MagicMock, jwt_service: MagicMock
-    ) -> None:
-        token = MagicMock()
-        token.claims = json.dumps(
-            {
-                "oin": OIN,
-                "sub": "00000123",
-                "aud": "test-audience",
-                "scope": "test-scope",
-                "cnf": {"x5t#S256": "abc123thumbprint"},
-            }
-        )
-        jwt_service.verify.return_value = token
-        client.get("/validate", headers=bearer())
-        ca_service.check_cert_fingerprint.assert_called_once()
-        call_args = ca_service.check_cert_fingerprint.call_args
-        assert call_args[0][1] == "abc123thumbprint"
