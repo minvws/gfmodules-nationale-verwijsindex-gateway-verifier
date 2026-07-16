@@ -24,14 +24,14 @@ from app.config import (
     reset_config,
     set_config,
 )
-from app.container import get_ca_service, get_jwt_service
+from app.container import get_jwt_service
 from app.logging.events import NviLog, PrsLog
-from app.models.oin import OinNumber
 from app.routers.validator import router
 from app.services.jwt import JwtException
 
-OIN = "00000001123456700000"
-OTHER_OIN = "00000002987654321000"
+CLIENT_ORGANIZATION_ID = "00000001123456700000"
+ORGANIZATION_ID = "00000001123456780000"
+OTHER_ORGANIZATION_ID = "00000002987654321000"
 
 
 @pytest.fixture(autouse=True)
@@ -55,22 +55,13 @@ def test_config():
 
 
 @pytest.fixture
-def ca_service():
-    mock = MagicMock()
-    mock.is_oin_certificate.return_value = (True, OinNumber(OIN))
-    mock.check_cert_fingerprint.return_value = True
-    mock.get_presented_thumbprint.return_value = "presentedthumb"
-    return mock
-
-
-@pytest.fixture
 def jwt_service():
     mock = MagicMock()
     token = MagicMock()
     token.claims = json.dumps(
         {
-            "oin": OIN,
-            "sub": "00000123",
+            "oin": ORGANIZATION_ID,
+            "sub": CLIENT_ORGANIZATION_ID,
             "aud": "test-audience",
             "scope": "test-scope",
             "cnf": {"x5t#S256": "validthumbprint"},
@@ -81,16 +72,19 @@ def jwt_service():
 
 
 @pytest.fixture
-def client(ca_service, jwt_service):
+def client(jwt_service):
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_ca_service] = lambda: ca_service
     app.dependency_overrides[get_jwt_service] = lambda: jwt_service
     return TestClient(app)
 
 
-def bearer(token: str = "valid.jwt.token") -> dict[str, str]:
-    return {"Authorization": f"Bearer {token}"}
+def headers(token: str = "valid.jwt.token") -> dict[str, str]:
+    return {
+        "x-gf-client-organization-id": CLIENT_ORGANIZATION_ID,
+        "x-gf-client-common-name": "common-name",
+        "Authorization": "Bearer valid.jwt.token",
+    }
 
 
 def _record(caplog: pytest.LogCaptureFixture, event_id: str) -> logging.LogRecord:
@@ -110,17 +104,17 @@ def test_missing_header_logs_005(client: TestClient, caplog: pytest.LogCaptureFi
 
 def test_non_bearer_header_logs_001(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.DEBUG):
-        client.get("/validate", headers={"Authorization": "Basic xx"})
+        client.get(
+            "/validate",
+            headers={
+                "x-gf-client-organization-id": CLIENT_ORGANIZATION_ID,
+                "x-gf-client-common-name": "common-name",
+                "Authorization": "Basic xx",
+            },
+        )
     record = _record(caplog, NviLog.JWT_VERIFICATION_FAILED.event_id)
     assert record.error_reason == "malformed_authorization_header"  # type: ignore[attr-defined]
     assert record.token_present is True  # type: ignore[attr-defined]
-
-
-def test_invalid_cert_logs_002(client: TestClient, ca_service: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
-    ca_service.is_oin_certificate.return_value = (False, None)
-    with caplog.at_level(logging.DEBUG):
-        client.get("/validate", headers=bearer())
-    _record(caplog, NviLog.MTLS_BINDING_MISMATCH.event_id)
 
 
 def test_jwt_verify_failure_logs_001(
@@ -128,51 +122,29 @@ def test_jwt_verify_failure_logs_001(
 ) -> None:
     jwt_service.verify.side_effect = JwtException("expired")
     with caplog.at_level(logging.DEBUG):
-        client.get("/validate", headers=bearer())
+        client.get("/validate", headers=headers())
     record = _record(caplog, NviLog.JWT_VERIFICATION_FAILED.event_id)
     assert record.error_reason == "expired"  # type: ignore[attr-defined]
 
 
-def test_missing_cnf_logs_002(client: TestClient, jwt_service: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
-    token = MagicMock()
-    token.claims = json.dumps({"oin": OIN, "sub": "00000123", "aud": "test-audience"})
-    jwt_service.verify.return_value = token
-    with caplog.at_level(logging.DEBUG):
-        client.get("/validate", headers=bearer())
-    record = _record(caplog, NviLog.MTLS_BINDING_MISMATCH.event_id)
-    assert record.cert_thumbprint_jwt is None  # type: ignore[attr-defined]
-    assert record.cert_thumbprint_presented == "presentedthumb"  # type: ignore[attr-defined]
-
-
-def test_fingerprint_mismatch_logs_002(
-    client: TestClient, ca_service: MagicMock, caplog: pytest.LogCaptureFixture
-) -> None:
-    ca_service.check_cert_fingerprint.return_value = False
-    with caplog.at_level(logging.DEBUG):
-        client.get("/validate", headers=bearer())
-    record = _record(caplog, NviLog.MTLS_BINDING_MISMATCH.event_id)
-    assert record.cert_thumbprint_jwt == "validthumbprint"  # type: ignore[attr-defined]
-
-
 def test_oin_mismatch_logs_003(client: TestClient, jwt_service: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
     token = MagicMock()
-    token.claims = json.dumps({"oin": OTHER_OIN, "sub": "00000123", "cnf": {"x5t#S256": "validthumbprint"}})
+    token.claims = json.dumps(
+        {"oin": OTHER_ORGANIZATION_ID, "sub": OTHER_ORGANIZATION_ID, "cnf": {"x5t#S256": "validthumbprint"}}
+    )
     jwt_service.verify.return_value = token
     with caplog.at_level(logging.DEBUG):
-        client.get("/validate", headers=bearer())
+        client.get("/validate", headers=headers())
     record = _record(caplog, NviLog.URA_AUTHORIZATION_MISMATCH.event_id)
-    assert record.resource_ura == OIN  # type: ignore[attr-defined]
-    assert record.resource_id == OTHER_OIN  # type: ignore[attr-defined]
+    assert record.sub == OTHER_ORGANIZATION_ID  # type: ignore[attr-defined]
 
 
 def test_success_logs_004(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.DEBUG):
-        response = client.get("/validate", headers=bearer())
+        response = client.get("/validate", headers=headers())
     assert response.status_code == 200
     record = _record(caplog, NviLog.AUTHENTICATION_SUCCESS.event_id)
-    assert record.ura_number == "00000123"  # type: ignore[attr-defined]
-    # prefix only, never the full thumbprint
-    assert record.cert_thumbprint_prefix == "validthu"  # type: ignore[attr-defined]
+    assert record.sub == CLIENT_ORGANIZATION_ID  # type: ignore[attr-defined]
     assert record.scope == "test-scope"  # type: ignore[attr-defined]
 
 
@@ -192,7 +164,6 @@ def test_prs_missing_header_logs_200404(
         client.get("/validate")
     record = _record(caplog, PrsLog.MISSING_AUTHORIZATION_HEADER.event_id)
     assert record.token_present is False  # type: ignore[attr-defined]
-    assert record.handelende_oin == OIN  # type: ignore[attr-defined]
 
 
 def test_prs_jwt_verify_failure_logs_200400(
@@ -200,63 +171,31 @@ def test_prs_jwt_verify_failure_logs_200400(
 ) -> None:
     jwt_service.verify.side_effect = JwtException("expired")
     with caplog.at_level(logging.DEBUG):
-        client.get("/validate", headers=bearer())
+        client.get("/validate", headers=headers())
     record = _record(caplog, PrsLog.JWT_VERIFICATION_FAILED.event_id)
     assert record.error_reason == "expired"  # type: ignore[attr-defined]
-
-
-def test_prs_invalid_cert_logs_200401(
-    prs_config: Config, client: TestClient, ca_service: MagicMock, caplog: pytest.LogCaptureFixture
-) -> None:
-    ca_service.is_oin_certificate.return_value = (False, None)
-    with caplog.at_level(logging.DEBUG):
-        client.get("/validate", headers=bearer())
-    _record(caplog, PrsLog.MTLS_BINDING_MISMATCH.event_id)
-
-
-def test_prs_missing_cnf_logs_200406(
-    prs_config: Config, client: TestClient, jwt_service: MagicMock, caplog: pytest.LogCaptureFixture
-) -> None:
-    token = MagicMock()
-    token.claims = json.dumps({"oin": OIN, "sub": "00000123", "aud": "test-audience"})
-    jwt_service.verify.return_value = token
-    with caplog.at_level(logging.DEBUG):
-        client.get("/validate", headers=bearer())
-    record = _record(caplog, PrsLog.TOKEN_BINDING_INVALID.event_id)
-    assert record.failure_reason == "missing_cnf_claim"  # type: ignore[attr-defined]
-    assert record.handelende_oin == OIN  # type: ignore[attr-defined]
-
-
-def test_prs_fingerprint_mismatch_logs_200401(
-    prs_config: Config, client: TestClient, ca_service: MagicMock, caplog: pytest.LogCaptureFixture
-) -> None:
-    ca_service.check_cert_fingerprint.return_value = False
-    with caplog.at_level(logging.DEBUG):
-        client.get("/validate", headers=bearer())
-    record = _record(caplog, PrsLog.MTLS_BINDING_MISMATCH.event_id)
-    assert record.cert_thumbprint_jwt == "validthumbprint"  # type: ignore[attr-defined]
-    assert record.handelende_oin == OIN  # type: ignore[attr-defined]
 
 
 def test_prs_oin_mismatch_logs_200406(
     prs_config: Config, client: TestClient, jwt_service: MagicMock, caplog: pytest.LogCaptureFixture
 ) -> None:
     token = MagicMock()
-    token.claims = json.dumps({"oin": OTHER_OIN, "sub": "00000123", "cnf": {"x5t#S256": "validthumbprint"}})
+    token.claims = json.dumps(
+        {"oin": OTHER_ORGANIZATION_ID, "sub": OTHER_ORGANIZATION_ID, "cnf": {"x5t#S256": "validthumbprint"}}
+    )
     jwt_service.verify.return_value = token
     with caplog.at_level(logging.DEBUG):
-        client.get("/validate", headers=bearer())
+        client.get("/validate", headers=headers())
     record = _record(caplog, PrsLog.TOKEN_BINDING_INVALID.event_id)
     assert record.failure_reason == "oin_mismatch"  # type: ignore[attr-defined]
-    assert record.handelende_oin == OIN  # type: ignore[attr-defined]
+    assert record.sub == OTHER_ORGANIZATION_ID  # type: ignore[attr-defined]
 
 
 def test_prs_success_logs_200403(prs_config: Config, client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.DEBUG):
-        response = client.get("/validate", headers=bearer())
+        response = client.get("/validate", headers=headers())
     assert response.status_code == 200
     record = _record(caplog, PrsLog.AUTHENTICATION_SUCCESS.event_id)
-    assert record.handelende_oin == OIN  # type: ignore[attr-defined]
+    assert record.sub == CLIENT_ORGANIZATION_ID  # type: ignore[attr-defined]
     # prefix only, never the full thumbprint
-    assert record.cert_thumbprint_prefix == "validthu"  # type: ignore[attr-defined]
     assert record.scope == "test-scope"  # type: ignore[attr-defined]
