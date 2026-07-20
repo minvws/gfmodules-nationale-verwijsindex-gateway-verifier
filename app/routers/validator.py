@@ -111,20 +111,17 @@ def _validate_oin(
     headers: dict[str, str] = {
         "x-gf-cert-type": "OIN",
         "x-gf-audience": _aud_str(claims.get("aud")),
-        "x-gf-scope": claims.get("scope", ""),
-        "x-gf-sub": claims.get("sub"),
+        "x-gf-scope": claims.get("scope"),
+        "x-gf-sub": claims.get("sub"),  # OIN of client (acting party)
+        "x-gf-organization-name": claims.get("organization_name"),
     }
-    # check if PRS claims are present
-    if claims.get("org_oin") is not None:
-        # subject is the oin
-        headers["x-gf-oin"] = str(claims["org_oin"])
-    else:
-        # otherwise default to NVI
-        headers["x-gf-oin"] = str(claims["oin"])
+    # Depending on app type (NVI -> URA or PRS -> OIN)
+    if claims.get("org_oin"):
+        headers["x-gf-org-oin"] = str(claims["org_oin"])
+    if claims.get("org_ura"):
+        headers["x-gf-org-ura"] = str(claims["org_ura"])
     if claims.get("source_id"):
         headers["x-gf-source-id"] = str(claims["source_id"])
-    if claims.get("organization_name"):
-        headers["x-gf-organization-name"] = str(claims["organization_name"])
     log.event(
         logger,
         log.AUTHENTICATION_SUCCESS,
