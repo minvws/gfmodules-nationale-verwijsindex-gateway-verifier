@@ -39,7 +39,6 @@ def test_config():
     cfg = Config(
         app=ConfigApp(),
         oin=ConfigOin(
-            oin_ca_path="/dev/null",
             issuer="test-issuer",
             audience=["test-audience"],
             jwks_url="http://localhost/jwks",
