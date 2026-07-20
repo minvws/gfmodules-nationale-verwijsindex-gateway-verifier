@@ -26,10 +26,10 @@ KONG_URL = "http://kong.example.com/service"
 VALID_CLAIMS = json.dumps(
     {
         "sub": CLIENT_ORGANIZATION_ID,
-        "org_oin": ORGANIZATION_ID,
         "aud": "test-audience",
         "scope": "test-scope",
         "cnf": {"x5t#S256": "validthumbprint"},
+        "act": {"sub": ORGANIZATION_ID},
     }
 )
 
@@ -159,8 +159,8 @@ class TestProxyForwarding:
         with patch("app.routers.proxy.http_requests.request", return_value=kong_ok()) as mock_req:
             client.post("/proxy", headers=headers())
             sent_headers = mock_req.call_args[1]["headers"]
-            assert "x-gf-oin" in sent_headers
-            assert sent_headers["x-gf-oin"] == ORGANIZATION_ID
+            assert "x-gf-act-sub" in sent_headers
+            assert sent_headers["x-gf-act-sub"] == ORGANIZATION_ID
 
     def test_original_body_forwarded(self, client: TestClient) -> None:
         with patch("app.routers.proxy.http_requests.request", return_value=kong_ok()) as mock_req:
@@ -204,9 +204,9 @@ class TestProxyTransparentForwarding:
 
     def test_spoofed_identity_header_overwritten(self, client: TestClient) -> None:
         with patch("app.routers.proxy.http_requests.request", return_value=kong_ok()) as mock_req:
-            client.post("/proxy", headers={**headers(), "x-gf-oin": "99999999999999999999"})
+            client.post("/proxy", headers={**headers(), "x-gf-act-sub": "99999999999999999999"})
             sent_headers = mock_req.call_args[1]["headers"]
-            assert sent_headers["x-gf-oin"] == ORGANIZATION_ID
+            assert sent_headers["x-gf-act-sub"] == ORGANIZATION_ID
 
     def test_backend_content_type_returned(self, client: TestClient) -> None:
         with patch("app.routers.proxy.http_requests.request", return_value=kong_ok()):

@@ -112,15 +112,24 @@ def _validate_oin(
         "x-gf-cert-type": "OIN",
         "x-gf-audience": _aud_str(claims.get("aud")),
         "x-gf-scope": claims.get("scope", ""),
-        "x-gf-sub": claims.get("sub"),
+        "x-gf-sub": claims.get("sub"),  # this is the parent org (RFC. 8693)
     }
-    # check if PRS claims are present
-    if claims.get("org_oin") is not None:
-        # subject is the oin
-        headers["x-gf-oin"] = str(claims["org_oin"])
-    else:
-        # otherwise default to NVI
-        headers["x-gf-oin"] = str(claims["oin"])
+
+    act = claims.get("act")
+    if act is None:
+        log.event(
+            logger,
+            log.JWT_VERIFICATION_FAILED,
+            "Missing act in claims",
+            client_organization_id=auth_headers.client_organization_id,
+            client_common_name=auth_headers.client_common_name,
+            failure_reason="oin_mismatch",
+            **claims,
+        )
+        return Response("Missing `act` in claims", status_code=400)
+
+    headers["x-gf-act-sub"] = act.get("sub")
+
     if claims.get("source_id"):
         headers["x-gf-source-id"] = str(claims["source_id"])
     if claims.get("organization_name"):

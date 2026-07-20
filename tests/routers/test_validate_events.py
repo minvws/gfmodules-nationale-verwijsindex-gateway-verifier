@@ -59,8 +59,8 @@ def jwt_service():
     token = MagicMock()
     token.claims = json.dumps(
         {
-            "oin": ORGANIZATION_ID,
             "sub": CLIENT_ORGANIZATION_ID,
+            "act": {"sub": ORGANIZATION_ID},
             "aud": "test-audience",
             "scope": "test-scope",
             "cnf": {"x5t#S256": "validthumbprint"},
@@ -129,7 +129,11 @@ def test_jwt_verify_failure_logs_001(
 def test_oin_mismatch_logs_003(client: TestClient, jwt_service: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
     token = MagicMock()
     token.claims = json.dumps(
-        {"oin": OTHER_ORGANIZATION_ID, "sub": OTHER_ORGANIZATION_ID, "cnf": {"x5t#S256": "validthumbprint"}}
+        {
+            "oin": OTHER_ORGANIZATION_ID,
+            "sub": OTHER_ORGANIZATION_ID,
+            "cnf": {"x5t#S256": "validthumbprint"},
+        }
     )
     jwt_service.verify.return_value = token
     with caplog.at_level(logging.DEBUG):
@@ -166,7 +170,10 @@ def test_prs_missing_header_logs_200404(
 
 
 def test_prs_jwt_verify_failure_logs_200400(
-    prs_config: Config, client: TestClient, jwt_service: MagicMock, caplog: pytest.LogCaptureFixture
+    prs_config: Config,
+    client: TestClient,
+    jwt_service: MagicMock,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     jwt_service.verify.side_effect = JwtException("expired")
     with caplog.at_level(logging.DEBUG):
@@ -176,11 +183,18 @@ def test_prs_jwt_verify_failure_logs_200400(
 
 
 def test_prs_oin_mismatch_logs_200406(
-    prs_config: Config, client: TestClient, jwt_service: MagicMock, caplog: pytest.LogCaptureFixture
+    prs_config: Config,
+    client: TestClient,
+    jwt_service: MagicMock,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     token = MagicMock()
     token.claims = json.dumps(
-        {"oin": OTHER_ORGANIZATION_ID, "sub": OTHER_ORGANIZATION_ID, "cnf": {"x5t#S256": "validthumbprint"}}
+        {
+            "oin": OTHER_ORGANIZATION_ID,
+            "sub": OTHER_ORGANIZATION_ID,
+            "cnf": {"x5t#S256": "validthumbprint"},
+        }
     )
     jwt_service.verify.return_value = token
     with caplog.at_level(logging.DEBUG):
