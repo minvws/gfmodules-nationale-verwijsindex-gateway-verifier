@@ -30,6 +30,7 @@ from app.routers.validator import router
 from app.services.jwt import JwtException
 
 CLIENT_ORGANIZATION_ID = "00000001123456700000"
+CLIENT_COMMON_NAME = "common-name"
 ORGANIZATION_ID = "00000001123456780000"
 OTHER_ORGANIZATION_ID = "00000002987654321000"
 
@@ -59,8 +60,8 @@ def jwt_service():
     token = MagicMock()
     token.claims = json.dumps(
         {
-            "sub": CLIENT_ORGANIZATION_ID,
-            "act": {"sub": ORGANIZATION_ID},
+            "sub": ORGANIZATION_ID,
+            "act": {"sub": CLIENT_ORGANIZATION_ID, "cn": CLIENT_COMMON_NAME},
             "aud": "test-audience",
             "scope": "test-scope",
             "cnf": {"x5t#S256": "validthumbprint"},
@@ -80,8 +81,8 @@ def client(jwt_service):
 
 def headers(token: str = "valid.jwt.token") -> dict[str, str]:
     return {
-        "x-gf-client-organization-id": CLIENT_ORGANIZATION_ID,
-        "x-gf-client-common-name": "common-name",
+        "x-gf-act-sub": CLIENT_ORGANIZATION_ID,
+        "x-gf-act-cn": "common-name",
         "Authorization": "Bearer valid.jwt.token",
     }
 
@@ -106,8 +107,8 @@ def test_non_bearer_header_logs_001(client: TestClient, caplog: pytest.LogCaptur
         client.get(
             "/validate",
             headers={
-                "x-gf-client-organization-id": CLIENT_ORGANIZATION_ID,
-                "x-gf-client-common-name": "common-name",
+                "x-gf-act-sub": CLIENT_ORGANIZATION_ID,
+                "x-gf-act-cn": "common-name",
                 "Authorization": "Basic xx",
             },
         )
@@ -130,8 +131,8 @@ def test_oin_mismatch_logs_003(client: TestClient, jwt_service: MagicMock, caplo
     token = MagicMock()
     token.claims = json.dumps(
         {
-            "oin": OTHER_ORGANIZATION_ID,
             "sub": OTHER_ORGANIZATION_ID,
+            "act": {"sub": OTHER_ORGANIZATION_ID, "cn": "other-common-name"},
             "cnf": {"x5t#S256": "validthumbprint"},
         }
     )
@@ -147,7 +148,9 @@ def test_success_logs_004(client: TestClient, caplog: pytest.LogCaptureFixture) 
         response = client.get("/validate", headers=headers())
     assert response.status_code == 200
     record = _record(caplog, NviLog.AUTHENTICATION_SUCCESS.event_id)
-    assert record.sub == CLIENT_ORGANIZATION_ID  # type: ignore[attr-defined]
+    assert record.sub == ORGANIZATION_ID  # type: ignore[attr-defined]
+    assert record.act["cn"] == CLIENT_COMMON_NAME  # type: ignore[attr-defined]
+    assert record.act["sub"] == CLIENT_ORGANIZATION_ID  # type: ignore[attr-defined]
     assert record.scope == "test-scope"  # type: ignore[attr-defined]
 
 
@@ -191,7 +194,7 @@ def test_prs_oin_mismatch_logs_200406(
     token = MagicMock()
     token.claims = json.dumps(
         {
-            "oin": OTHER_ORGANIZATION_ID,
+            "act": {"sub": OTHER_ORGANIZATION_ID},
             "sub": OTHER_ORGANIZATION_ID,
             "cnf": {"x5t#S256": "validthumbprint"},
         }
@@ -209,6 +212,8 @@ def test_prs_success_logs_200403(prs_config: Config, client: TestClient, caplog:
         response = client.get("/validate", headers=headers())
     assert response.status_code == 200
     record = _record(caplog, PrsLog.AUTHENTICATION_SUCCESS.event_id)
-    assert record.sub == CLIENT_ORGANIZATION_ID  # type: ignore[attr-defined]
+    assert record.sub == ORGANIZATION_ID  # type: ignore[attr-defined]
+    assert record.act["cn"] == CLIENT_COMMON_NAME  # type: ignore[attr-defined]
+    assert record.act["sub"] == CLIENT_ORGANIZATION_ID  # type: ignore[attr-defined]
     # prefix only, never the full thumbprint
     assert record.scope == "test-scope"  # type: ignore[attr-defined]

@@ -84,37 +84,6 @@ def _validate_oin(
 
     claims = json.loads(verified_token.claims)
 
-    jwt_oin = claims.get("sub")
-    if not jwt_oin:
-        log.event(
-            logger,
-            log.URA_AUTHORIZATION_MISMATCH,
-            "missing OIN claim in token",
-            client_organization_id=auth_headers.client_organization_id,
-            client_common_name=auth_headers.client_common_name,
-            failure_reason="missing_oin_claim",
-            **claims,
-        )
-        return Response("Missing OIN claim in token", status_code=400)
-    if str(jwt_oin) != str(auth_headers.client_organization_id):
-        log.event(
-            logger,
-            log.URA_AUTHORIZATION_MISMATCH,
-            "certificate OIN does not match JWT OIN",
-            client_organization_id=auth_headers.client_organization_id,
-            client_common_name=auth_headers.client_common_name,
-            failure_reason="oin_mismatch",
-            **claims,
-        )
-        return Response("Certificate OIN does not match JWT OIN", status_code=400)
-
-    headers: dict[str, str] = {
-        "x-gf-cert-type": "OIN",
-        "x-gf-audience": _aud_str(claims.get("aud")),
-        "x-gf-scope": claims.get("scope", ""),
-        "x-gf-sub": claims.get("sub"),  # this is the parent org (RFC. 8693)
-    }
-
     act = claims.get("act")
     if act is None:
         log.event(
@@ -128,12 +97,56 @@ def _validate_oin(
         )
         return Response("Missing `act` in claims", status_code=400)
 
-    headers["x-gf-act-sub"] = act.get("sub")
+    sub_org_id = act.get("sub")
+    if not sub_org_id:
+        log.event(
+            logger,
+            log.URA_AUTHORIZATION_MISMATCH,
+            "missing OIN claim in token",
+            client_organization_id=auth_headers.client_organization_id,
+            client_common_name=auth_headers.client_common_name,
+            failure_reason="missing_oin_claim",
+            **claims,
+        )
+        return Response("Missing OIN claim in token", status_code=400)
+
+    if str(sub_org_id) != str(auth_headers.client_organization_id):
+        log.event(
+            logger,
+            log.URA_AUTHORIZATION_MISMATCH,
+            "certificate OIN does not match JWT OIN",
+            client_organization_id=auth_headers.client_organization_id,
+            client_common_name=auth_headers.client_common_name,
+            failure_reason="oin_mismatch",
+            **claims,
+        )
+        return Response("Certificate OIN does not match JWT OIN", status_code=400)
+
+    token_common_name = act.get("cn")
+    if token_common_name != auth_headers.client_common_name:
+        log.event(
+            logger,
+            log.JWT_VERIFICATION_FAILED,
+            "JWT act.cn does not match certificate CommonName",
+            client_organization_id=auth_headers.client_organization_id,
+            client_common_name=auth_headers.client_common_name,
+            failure_reason="oin_mismatch",
+            **claims,
+        )
+
+        return Response("JWT `act.cn` does not match certificate CommonName", status_code=400)
+
+    headers: dict[str, str] = {
+        "x-gf-cert-type": "OIN",
+        "x-gf-audience": _aud_str(claims.get("aud")),
+        "x-gf-scope": claims.get("scope", ""),
+        "x-gf-sub": claims.get("sub"),  # this is the parent org (RFC. 8693)
+        "x-gf-act-sub": sub_org_id,
+        "x-gf-organization-name": claims.get("organization_name"),
+    }
 
     if claims.get("source_id"):
         headers["x-gf-source-id"] = str(claims["source_id"])
-    if claims.get("organization_name"):
-        headers["x-gf-organization-name"] = str(claims["organization_name"])
     log.event(
         logger,
         log.AUTHENTICATION_SUCCESS,

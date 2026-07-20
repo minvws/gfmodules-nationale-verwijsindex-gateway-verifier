@@ -20,16 +20,17 @@ from app.container import get_jwt_service
 from app.routers.proxy import router
 
 CLIENT_ORGANIZATION_ID = "00000001123456700000"
+CLIENT_COMMON_NAME = "common-name"
 ORGANIZATION_ID = "00000001123456780000"
 KONG_URL = "http://kong.example.com/service"
 
 VALID_CLAIMS = json.dumps(
     {
-        "sub": CLIENT_ORGANIZATION_ID,
+        "sub": ORGANIZATION_ID,
         "aud": "test-audience",
         "scope": "test-scope",
         "cnf": {"x5t#S256": "validthumbprint"},
-        "act": {"sub": ORGANIZATION_ID},
+        "act": {"sub": CLIENT_ORGANIZATION_ID, "cn": CLIENT_COMMON_NAME},
     }
 )
 
@@ -72,8 +73,8 @@ def client(jwt_service):
 
 def headers() -> dict[str, str]:
     return {
-        "x-gf-client-organization-id": CLIENT_ORGANIZATION_ID,
-        "x-gf-client-common-name": "common-name",
+        "x-gf-act-sub": CLIENT_ORGANIZATION_ID,
+        "x-gf-act-cn": "common-name",
         "Authorization": "Bearer valid.jwt.token",
     }
 
@@ -98,8 +99,8 @@ class TestProxyValidation:
         response = client.post(
             "/proxy",
             headers={
-                "x-gf-client-organization-id": "organization-id",
-                "x-gf-client-common-name": "common-name",
+                "x-gf-act-sub": "organization-id",
+                "x-gf-act-cn": "common-name",
                 "Authorization": "INVALID",
             },
         )
@@ -109,8 +110,8 @@ class TestProxyValidation:
         response = client.post(
             "/proxy",
             headers={
-                "x-gf-client-organization-id": "organization-id",
-                "x-gf-client-common-name": "common-name",
+                "x-gf-act-sub": "organization-id",
+                "x-gf-act-cn": "common-name",
             },
         )
         assert response.status_code == 500
@@ -119,7 +120,7 @@ class TestProxyValidation:
         response = client.post(
             "/proxy",
             headers={
-                "x-gf-client-common-name": "common-name",
+                "x-gf-act-cn": "common-name",
             },
         )
         assert response.status_code == 500
@@ -128,7 +129,7 @@ class TestProxyValidation:
         response = client.post(
             "/proxy",
             headers={
-                "x-gf-client-organization-id": "organization-id",
+                "x-gf-act-sub": "organization-id",
             },
         )
         assert response.status_code == 500
@@ -160,7 +161,7 @@ class TestProxyForwarding:
             client.post("/proxy", headers=headers())
             sent_headers = mock_req.call_args[1]["headers"]
             assert "x-gf-act-sub" in sent_headers
-            assert sent_headers["x-gf-act-sub"] == ORGANIZATION_ID
+            assert sent_headers["x-gf-act-sub"] == CLIENT_ORGANIZATION_ID
 
     def test_original_body_forwarded(self, client: TestClient) -> None:
         with patch("app.routers.proxy.http_requests.request", return_value=kong_ok()) as mock_req:
@@ -201,12 +202,6 @@ class TestProxyTransparentForwarding:
             )
             sent_headers = mock_req.call_args[1]["headers"]
             assert sent_headers["x-forwarded-tls-client-cert"] == "PEMDATA"
-
-    def test_spoofed_identity_header_overwritten(self, client: TestClient) -> None:
-        with patch("app.routers.proxy.http_requests.request", return_value=kong_ok()) as mock_req:
-            client.post("/proxy", headers={**headers(), "x-gf-act-sub": "99999999999999999999"})
-            sent_headers = mock_req.call_args[1]["headers"]
-            assert sent_headers["x-gf-act-sub"] == ORGANIZATION_ID
 
     def test_backend_content_type_returned(self, client: TestClient) -> None:
         with patch("app.routers.proxy.http_requests.request", return_value=kong_ok()):
