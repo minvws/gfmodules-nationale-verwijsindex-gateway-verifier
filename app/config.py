@@ -42,7 +42,6 @@ class ConfigLogging(BaseModel):
 
 
 class ConfigOin(BaseModel):
-    oin_ca_path: str
     issuer: str
     audience: list[str]
     jwks_url: str
