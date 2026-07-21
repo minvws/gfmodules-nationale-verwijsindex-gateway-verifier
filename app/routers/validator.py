@@ -142,6 +142,7 @@ def _validate_oin(
         "x-gf-scope": claims.get("scope", ""),
         "x-gf-sub": claims.get("sub"),  # this is the parent org (RFC. 8693)
         "x-gf-act-sub": sub_org_id,
+        "x-gf-act-cn": token_common_name,
         "x-gf-organization-name": claims.get("organization_name"),
     }
 
