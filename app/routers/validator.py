@@ -84,8 +84,21 @@ def _validate_oin(
 
     claims = json.loads(verified_token.claims)
 
-    jwt_oin = claims.get("sub")
-    if not jwt_oin:
+    act = claims.get("act")
+    if act is None:
+        log.event(
+            logger,
+            log.JWT_VERIFICATION_FAILED,
+            "Missing act in claims",
+            client_organization_id=auth_headers.client_organization_id,
+            client_common_name=auth_headers.client_common_name,
+            failure_reason="oin_mismatch",
+            **claims,
+        )
+        return Response("Missing `act` in claims", status_code=400)
+
+    sub_org_id = act.get("sub")
+    if not sub_org_id:
         log.event(
             logger,
             log.URA_AUTHORIZATION_MISMATCH,
@@ -96,7 +109,8 @@ def _validate_oin(
             **claims,
         )
         return Response("Missing OIN claim in token", status_code=400)
-    if str(jwt_oin) != str(auth_headers.client_organization_id):
+
+    if str(sub_org_id) != str(auth_headers.client_organization_id):
         log.event(
             logger,
             log.URA_AUTHORIZATION_MISMATCH,
@@ -108,23 +122,31 @@ def _validate_oin(
         )
         return Response("Certificate OIN does not match JWT OIN", status_code=400)
 
+    token_common_name = act.get("cn")
+    if token_common_name != auth_headers.client_common_name:
+        log.event(
+            logger,
+            log.JWT_VERIFICATION_FAILED,
+            "JWT act.cn does not match certificate CommonName",
+            client_organization_id=auth_headers.client_organization_id,
+            client_common_name=auth_headers.client_common_name,
+            failure_reason="oin_mismatch",
+            **claims,
+        )
+
+        return Response("JWT `act.cn` does not match certificate CommonName", status_code=400)
+
     headers: dict[str, str] = {
         "x-gf-cert-type": "OIN",
         "x-gf-audience": _aud_str(claims.get("aud")),
         "x-gf-scope": claims.get("scope", ""),
-        "x-gf-sub": claims.get("sub"),
+        "x-gf-sub": claims.get("sub"),  # this is the parent org (RFC. 8693)
+        "x-gf-act-sub": sub_org_id,
+        "x-gf-organization-name": claims.get("organization_name"),
     }
-    # check if PRS claims are present
-    if claims.get("org_oin") is not None:
-        # subject is the oin
-        headers["x-gf-oin"] = str(claims["org_oin"])
-    else:
-        # otherwise default to NVI
-        headers["x-gf-oin"] = str(claims["oin"])
+
     if claims.get("source_id"):
         headers["x-gf-source-id"] = str(claims["source_id"])
-    if claims.get("organization_name"):
-        headers["x-gf-organization-name"] = str(claims["organization_name"])
     log.event(
         logger,
         log.AUTHENTICATION_SUCCESS,

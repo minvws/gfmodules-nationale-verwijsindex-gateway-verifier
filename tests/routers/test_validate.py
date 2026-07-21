@@ -89,8 +89,8 @@ def client(jwt_service):
 
 def headers(token: str = "valid.jwt.token") -> dict[str, str]:
     return {
-        "x-gf-client-organization-id": CLIENT_ORGANIZATION_ID,
-        "x-gf-client-common-name": "common-name",
+        "x-gf-act-sub": CLIENT_ORGANIZATION_ID,
+        "x-gf-act-cn": "common-name",
         "Authorization": "Bearer valid.jwt.token",
     }
 
@@ -100,8 +100,8 @@ class TestMissingOrInvalidAuthorization:
         response = client.get(
             "/validate",
             headers={
-                "x-gf-client-organization-id": CLIENT_ORGANIZATION_ID,
-                "x-gf-client-common-name": "common-name",
+                "x-gf-act-sub": CLIENT_ORGANIZATION_ID,
+                "x-gf-act-cn": "common-name",
             },
         )
         assert response.status_code == 500
@@ -110,8 +110,8 @@ class TestMissingOrInvalidAuthorization:
         response = client.get(
             "/validate",
             headers={
-                "x-gf-client-organization-id": CLIENT_ORGANIZATION_ID,
-                "x-gf-client-common-name": "common-name",
+                "x-gf-act-sub": CLIENT_ORGANIZATION_ID,
+                "x-gf-act-cn": "common-name",
                 "Authorization": "Basic auth",
             },
         )
@@ -134,9 +134,10 @@ class TestORGANIZATION_IDMatching:
         token = MagicMock()
         token.claims = json.dumps(
             {
-                "sub": OTHER_ORGANIZATION_ID,
+                "sub": ORGANIZATION_ID,
                 "aud": "test-audience",
                 "cnf": {"x5t#S256": "t"},
+                "act": {"sub": OTHER_ORGANIZATION_ID},
             }
         )
         jwt_service.verify.return_value = token
