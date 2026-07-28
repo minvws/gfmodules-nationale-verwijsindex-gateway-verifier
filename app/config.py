@@ -74,23 +74,23 @@ class ConfigUvicorn(BaseModel):
     reload_delay: float = Field(default=1)
     reload_dirs: list[str] = Field(default=["app"])
     use_ssl: bool = Field(default=False)
-    ssl_base_dir: str | None
-    ssl_cert_file: str | None
-    ssl_key_file: str | None
+    ssl_base_dir: str | None = None
+    ssl_cert_file: str | None = None
+    ssl_key_file: str | None = None
 
 
 class ConfigTelemetry(BaseModel):
     enabled: bool = Field(default=False)
-    endpoint: str | None
-    service_name: str | None
-    tracer_name: str | None
+    endpoint: str | None = None
+    service_name: str | None = None
+    tracer_name: str | None = None
 
 
 class ConfigStats(BaseModel):
     enabled: bool = Field(default=False)
-    host: str | None
-    port: int | None
-    module_name: str | None
+    host: str | None = None
+    port: int | None = None
+    module_name: str | None = None
 
 
 class ConfigKongProxy(BaseModel):
