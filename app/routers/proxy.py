@@ -1,6 +1,7 @@
 import json
 import logging
 from typing import Annotated
+from uuid import uuid4
 
 import requests as http_requests
 from fastapi import APIRouter, Depends, Request, Response
@@ -23,6 +24,8 @@ _SKIP_RESPONSE_HEADERS = {"content-length", "transfer-encoding", "connection", "
 # Paths (below /proxy) forwarded without authentication, so orchestration and
 # upstream health probes can check backend reachability without a bearer token.
 _UNAUTHENTICATED_PATHS = {"health"}
+
+CORRELATION_ID_HEADER = "X-GF-Correlation-ID"
 
 
 @router.api_route("/proxy", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
@@ -65,6 +68,8 @@ async def proxy(
     headers.update(
         {key: str(value) for key, value in identity.items() if key.startswith("x-gf-") and value is not None}
     )
+    if config.kong_proxy.generate_correlation_id:
+        headers[CORRELATION_ID_HEADER] = str(uuid4())
 
     # Preserve the request path and query string on the backend URL.
     target = config.kong_proxy.url.rstrip("/")

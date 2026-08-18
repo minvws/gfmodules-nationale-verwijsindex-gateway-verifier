@@ -81,3 +81,4 @@ ssl_key_file = server.key
 enabled = True
 # Url to proxy to. Could be a local NVI, or something like https://httpbin.org/headers
 url =
+generate_correlation_id = False
