@@ -96,6 +96,7 @@ class ConfigStats(BaseModel):
 class ConfigKongProxy(BaseModel):
     enabled: bool = Field(default=False)
     url: str
+    allow_client_correlation_id: bool = Field(default=False)
 
 
 class Config(BaseModel):

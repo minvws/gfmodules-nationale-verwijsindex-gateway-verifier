@@ -1,26 +1,80 @@
 import re
 import uuid
+from collections.abc import Generator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
 
 from app.logging.context import (
+    CLIENT_TRACE_ID_HEADER,
+    CORRELATION_ID_HEADER,
+    REQUEST_ID_HEADER,
+    UNSET,
     client_trace_id_var,
+    correlation_id_var,
     endpoint_var,
     ip_var,
     method_var,
     request_id_var,
 )
 
-REQUEST_ID_HEADER = "X-Request-ID"
-CLIENT_TRACE_ID_HEADER = "X-Client-Trace-ID"
-
 _SAFE_HEADER_VALUE = re.compile(r"[^a-zA-Z0-9\-_]")
 
 
 def _sanitize(value: str) -> str:
-    return _SAFE_HEADER_VALUE.sub("", value)[:64]
+    return _SAFE_HEADER_VALUE.sub("", value)[:64] or UNSET
+
+
+@dataclass(frozen=True)
+class RequestContext:
+    request_id: str
+    ip: str
+    client_trace_id: str
+    correlation_id: str
+    endpoint: str
+    method: str
+
+    @classmethod
+    def from_request(cls, request: Request) -> "RequestContext":
+        return cls(
+            request_id=str(uuid.uuid4()),
+            ip=request.client.host if request.client else UNSET,
+            client_trace_id=_sanitize(request.headers.get(CLIENT_TRACE_ID_HEADER, UNSET)),
+            correlation_id=_sanitize(request.headers.get(CORRELATION_ID_HEADER, UNSET)),
+            endpoint=request.url.path,
+            method=request.method,
+        )
+
+    def apply_to(self, response: Response) -> None:
+        response.headers[REQUEST_ID_HEADER] = self.request_id
+        if self.client_trace_id != UNSET:
+            response.headers[CLIENT_TRACE_ID_HEADER] = self.client_trace_id
+        if self.correlation_id != UNSET:
+            response.headers[CORRELATION_ID_HEADER] = self.correlation_id
+
+
+_CONTEXT_VARS: tuple[tuple[str, ContextVar[str]], ...] = (
+    ("request_id", request_id_var),
+    ("ip", ip_var),
+    ("client_trace_id", client_trace_id_var),
+    ("correlation_id", correlation_id_var),
+    ("endpoint", endpoint_var),
+    ("method", method_var),
+)
+
+
+@contextmanager
+def _bind(context: RequestContext) -> Generator[None]:
+    tokens = [(var, var.set(getattr(context, name))) for name, var in _CONTEXT_VARS]
+    try:
+        yield
+    finally:
+        for var, token in reversed(tokens):
+            var.reset(token)
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
@@ -28,24 +82,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     the duration of each request so every audit event carries it automatically."""
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        request_id = str(uuid.uuid4())
-        ip = request.client.host if request.client else "-"
-        client_trace_id = _sanitize(request.headers.get(CLIENT_TRACE_ID_HEADER, "-"))
+        context = RequestContext.from_request(request)
 
-        token_id = request_id_var.set(request_id)
-        token_ip = ip_var.set(ip)
-        token_trace = client_trace_id_var.set(client_trace_id)
-        token_endpoint = endpoint_var.set(request.url.path)
-        token_method = method_var.set(request.method)
-        try:
+        with _bind(context):
             response = await call_next(request)
-            response.headers[REQUEST_ID_HEADER] = request_id
-            if client_trace_id != "-":
-                response.headers[CLIENT_TRACE_ID_HEADER] = client_trace_id
+            context.apply_to(response)
             return response
-        finally:
-            request_id_var.reset(token_id)
-            ip_var.reset(token_ip)
-            client_trace_id_var.reset(token_trace)
-            endpoint_var.reset(token_endpoint)
-            method_var.reset(token_method)
