@@ -1,3 +1,4 @@
+import logging
 import re
 import uuid
 from collections.abc import Generator
@@ -8,6 +9,7 @@ from dataclasses import dataclass
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.types import ASGIApp
 
 from app.logging.context import (
     CLIENT_TRACE_ID_HEADER,
@@ -21,8 +23,10 @@ from app.logging.context import (
     method_var,
     request_id_var,
 )
+from app.logging.events import get_application_log
 
 _SAFE_HEADER_VALUE = re.compile(r"[^a-zA-Z0-9\-_]")
+_logger = logging.getLogger(__name__)
 
 
 def _sanitize(value: str) -> str:
@@ -81,10 +85,23 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     """Populates the logging context (request_id, ip, endpoint, method, ...) for
     the duration of each request so every audit event carries it automatically."""
 
+    def __init__(self, app: ASGIApp, correlation_id_expected: bool = False) -> None:
+        super().__init__(app)
+        self.correlation_id_expected = correlation_id_expected
+
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         context = RequestContext.from_request(request)
 
         with _bind(context):
+            if self.correlation_id_expected and context.correlation_id == UNSET:
+                log = get_application_log()
+                log.event(
+                    _logger,
+                    log.SYS_MISSING_CORRELATION_ID,
+                    message=f"Request arrived without {CORRELATION_ID_HEADER}",
+                    endpoint=context.endpoint,
+                    method=context.method,
+                )
             response = await call_next(request)
             context.apply_to(response)
             return response

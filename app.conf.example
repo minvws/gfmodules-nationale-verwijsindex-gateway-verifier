@@ -17,6 +17,8 @@ application_id = nationale-verwijsindex-gateway-verifier
 include_traces = False
 # Display human-readable debug logs in the console instead of JSON.
 debug_logs_in_console = False
+# Log an error when a request arrives without an X-GF-Correlation-ID header
+correlation_id_expected = False
 
 [oin]
 # URL of the Oauth service that issued the access token, used for validating the access token
