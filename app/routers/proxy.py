@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Request, Response
 
 from app.config import get_config
 from app.container import get_jwt_service
+from app.logging.context import CORRELATION_ID_HEADER
 from app.routers.validator import run_validate
 from app.services.jwt import JWTService
 
@@ -57,10 +58,17 @@ async def proxy(
     # Forward the caller's headers (client certificate, content-type, ...), but
     # strip any client-supplied x-gf-* so the identity cannot be spoofed, then
     # overlay the verified identity from the validate response.
+
+    # If the Kong proxy is configured to allow the client to supply a correlation ID,
+    # then we allow that header to be forwarded, otherwise we strip it out.
+    tunnelled_gf_headers = (
+        {CORRELATION_ID_HEADER.lower()} if config.kong_proxy.allow_client_correlation_id else frozenset()
+    )
     headers = {
         key: value
         for key, value in request.headers.items()
-        if key.lower() not in _SKIP_REQUEST_HEADERS and not key.lower().startswith("x-gf-")
+        if key.lower() not in _SKIP_REQUEST_HEADERS
+        and (not key.lower().startswith("x-gf-") or key.lower() in tunnelled_gf_headers)
     }
     headers.update(
         {key: str(value) for key, value in identity.items() if key.startswith("x-gf-") and value is not None}

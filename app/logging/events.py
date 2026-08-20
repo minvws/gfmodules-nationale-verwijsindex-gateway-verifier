@@ -44,6 +44,7 @@ class BaseLog:
     URA_AUTHORIZATION_MISMATCH: ClassVar[LogEvent]
     AUTHENTICATION_SUCCESS: ClassVar[LogEvent]
     MISSING_AUTHORIZATION_HEADER: ClassVar[LogEvent]
+    SYS_MISSING_CORRELATION_ID: ClassVar[LogEvent]
 
     @staticmethod
     def thumbprint_prefix(value: str | None) -> str | None:
@@ -132,6 +133,15 @@ class NviLog(BaseLog):
             _SIEM: ("endpoint", "client_id"),
         },
     )
+    SYS_MISSING_CORRELATION_ID = LogEvent(  # NVI-SYS-006
+        "100606",
+        logging.ERROR,
+        (_APP, _SIEM),
+        {
+            _APP: ("endpoint", "method"),
+            _SIEM: ("endpoint", "method"),
+        },
+    )
 
 
 class PrsLog(BaseLog):
@@ -187,6 +197,15 @@ class PrsLog(BaseLog):
         {
             _APP: ("endpoint", "method", "token_present", "handelende_oin"),
             _SIEM: ("endpoint", "handelende_oin"),
+        },
+    )
+    SYS_MISSING_CORRELATION_ID = LogEvent(  # PRS-SYS-007
+        "270407",
+        logging.ERROR,
+        (_APP, _SIEM),
+        {
+            _APP: ("endpoint", "method"),
+            _SIEM: ("endpoint", "method"),
         },
     )
 

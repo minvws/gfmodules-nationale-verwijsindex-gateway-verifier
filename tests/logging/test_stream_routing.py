@@ -7,7 +7,7 @@ from typing import Any, Iterator
 
 import pytest
 
-from app.logging.context import endpoint_var, ip_var, method_var, request_id_var
+from app.logging.context import correlation_id_var, endpoint_var, ip_var, method_var, request_id_var
 from app.logging.events import NviLog, PrsLog
 from app.logging.filters import AppFilter, LoggingStreams, SiemFilter
 from app.logging.formatter import JsonFormatter
@@ -35,6 +35,7 @@ def streams() -> Iterator[tuple[logging.Logger, io.StringIO, io.StringIO]]:
         ip_var.set("10.0.0.1"),
         endpoint_var.set("/validate"),
         method_var.set("GET"),
+        correlation_id_var.set("corr-1"),
     ]
     try:
         yield logger, app_buf, siem_buf
@@ -44,6 +45,7 @@ def streams() -> Iterator[tuple[logging.Logger, io.StringIO, io.StringIO]]:
         ip_var.reset(tokens[1])
         endpoint_var.reset(tokens[2])
         method_var.reset(tokens[3])
+        correlation_id_var.reset(tokens[4])
 
 
 def _messages(buf: io.StringIO) -> list[dict[str, Any]]:

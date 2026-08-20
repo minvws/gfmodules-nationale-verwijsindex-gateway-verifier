@@ -17,6 +17,8 @@ application_id = nationale-verwijsindex-gateway-verifier
 include_traces = False
 # Display human-readable debug logs in the console instead of JSON.
 debug_logs_in_console = False
+# Log an error when a request arrives without an X-GF-Correlation-ID header
+correlation_id_expected = False
 
 [oin]
 # URL of the Oauth service that issued the access token, used for validating the access token
@@ -81,3 +83,6 @@ ssl_key_file = server.key
 enabled = True
 # Url to proxy to. Could be a local NVI, or something like https://httpbin.org/headers
 url =
+# Forward a client-supplied X-GF-Correlation-ID to the backend instead of stripping
+# it with the other x-gf-* headers, so one request can be traced across services.
+allow_client_correlation_id = False

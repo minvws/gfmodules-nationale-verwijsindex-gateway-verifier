@@ -39,6 +39,7 @@ class ConfigLogging(BaseModel):
     application_id: str | None = Field(default=None)
     include_traces: bool = Field(default=True)
     debug_logs_in_console: bool = Field(default=False)
+    correlation_id_expected: bool = Field(default=False)
 
 
 class ConfigOin(BaseModel):
@@ -96,6 +97,7 @@ class ConfigStats(BaseModel):
 class ConfigKongProxy(BaseModel):
     enabled: bool = Field(default=False)
     url: str
+    allow_client_correlation_id: bool = Field(default=False)
 
 
 class Config(BaseModel):
