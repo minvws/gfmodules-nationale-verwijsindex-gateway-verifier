@@ -2,7 +2,9 @@ import json
 import logging
 from typing import Annotated
 
+import gfmodules.logging as gflog
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from gfmodules.logging import RESERVED_FIELDS
 from starlette.responses import JSONResponse
 
 from app.config import Config, get_config
@@ -13,6 +15,14 @@ from app.services.jwt import JwtException, JWTService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _loggable(claims: dict[str, object]) -> dict[str, object]:
+    """Claims come from the token, so a caller chooses their names. A claim named
+    after a LogRecord attribute is rejected by emit, which would turn a rejected
+    token into a 500.
+    """
+    return {name: value for name, value in claims.items() if name not in RESERVED_FIELDS}
 
 
 def _aud_str(aud: object) -> str:
@@ -33,23 +43,24 @@ def run_validate(
     try:
         auth_headers = AuthHeaders.from_request(request)
     except ValueError:
-        log.event(
+        gflog.emit(
             logger,
             log.MISSING_AUTHORIZATION_HEADER,
-            message="Headers are not correctly enforced in gateway, invalid authorization headers in request.",
-            failure_reason="missing_oin_claim",
-            token_present=False,
+            "Headers are not correctly enforced in gateway, invalid authorization headers in request.",
+            fields={
+                "failure_reason": "missing_oin_claim",
+                "token_present": False,
+                "request_headers": dict(request.headers),
+            },
             exc_info=True,
-            **request.headers,
         )
         raise HTTPException(status_code=500, detail="Unauthorized request")
     if not auth_headers.bearer.startswith("Bearer "):
-        log.event(
+        gflog.emit(
             logger,
             log.JWT_VERIFICATION_FAILED,
             "malformed Authorization header",
-            error_reason="malformed_authorization_header",
-            token_present=True,
+            fields={"error_reason": "malformed_authorization_header", "token_present": True},
         )
         return Response("Bearer authorization header is required", status_code=401)
 
@@ -73,12 +84,11 @@ def _validate_oin(
     try:
         verified_token = jwt_service.verify(token, config.oin.issuer, config.oin.audience)
     except JwtException as e:
-        log.event(
+        gflog.emit(
             logger,
             log.JWT_VERIFICATION_FAILED,
             "failed to verify JWT",
-            error_reason=str(e),
-            token_present=True,
+            fields={"error_reason": str(e), "token_present": True},
         )
         return Response("Token verification failed", status_code=400)
 
@@ -86,52 +96,60 @@ def _validate_oin(
 
     act = claims.get("act")
     if act is None:
-        log.event(
+        gflog.emit(
             logger,
             log.JWT_VERIFICATION_FAILED,
             "Missing act in claims",
-            client_organization_id=auth_headers.client_organization_id,
-            client_common_name=auth_headers.client_common_name,
-            failure_reason="oin_mismatch",
-            **claims,
+            fields={
+                "client_organization_id": auth_headers.client_organization_id,
+                "client_common_name": auth_headers.client_common_name,
+                "failure_reason": "oin_mismatch",
+                **_loggable(claims),
+            },
         )
         return Response("Missing `act` in claims", status_code=400)
 
     sub_org_id = act.get("sub")
     if not sub_org_id:
-        log.event(
+        gflog.emit(
             logger,
             log.URA_AUTHORIZATION_MISMATCH,
             "missing OIN claim in token",
-            client_organization_id=auth_headers.client_organization_id,
-            client_common_name=auth_headers.client_common_name,
-            failure_reason="missing_oin_claim",
-            **claims,
+            fields={
+                "client_organization_id": auth_headers.client_organization_id,
+                "client_common_name": auth_headers.client_common_name,
+                "failure_reason": "missing_oin_claim",
+                **_loggable(claims),
+            },
         )
         return Response("Missing OIN claim in token", status_code=400)
 
     if str(sub_org_id) != str(auth_headers.client_organization_id):
-        log.event(
+        gflog.emit(
             logger,
             log.URA_AUTHORIZATION_MISMATCH,
             "certificate OIN does not match JWT OIN",
-            client_organization_id=auth_headers.client_organization_id,
-            client_common_name=auth_headers.client_common_name,
-            failure_reason="oin_mismatch",
-            **claims,
+            fields={
+                "client_organization_id": auth_headers.client_organization_id,
+                "client_common_name": auth_headers.client_common_name,
+                "failure_reason": "oin_mismatch",
+                **_loggable(claims),
+            },
         )
         return Response("Certificate OIN does not match JWT OIN", status_code=400)
 
     token_common_name = act.get("cn")
     if token_common_name != auth_headers.client_common_name:
-        log.event(
+        gflog.emit(
             logger,
             log.JWT_VERIFICATION_FAILED,
             "JWT act.cn does not match certificate CommonName",
-            client_organization_id=auth_headers.client_organization_id,
-            client_common_name=auth_headers.client_common_name,
-            failure_reason="oin_mismatch",
-            **claims,
+            fields={
+                "client_organization_id": auth_headers.client_organization_id,
+                "client_common_name": auth_headers.client_common_name,
+                "failure_reason": "oin_mismatch",
+                **_loggable(claims),
+            },
         )
 
         return Response("JWT `act.cn` does not match certificate CommonName", status_code=400)
@@ -148,12 +166,7 @@ def _validate_oin(
 
     if claims.get("source_id"):
         headers["x-gf-source-id"] = str(claims["source_id"])
-    log.event(
-        logger,
-        log.AUTHENTICATION_SUCCESS,
-        "successfully validated JWT + Client",
-        **claims,
-    )
+    gflog.emit(logger, log.AUTHENTICATION_SUCCESS, "successfully validated JWT + Client", fields=_loggable(claims))
 
     return JSONResponse(headers, status_code=200)
 

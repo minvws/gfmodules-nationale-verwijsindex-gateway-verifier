@@ -3,71 +3,63 @@
 import io
 import json
 import logging
-from typing import Any, Iterator
+from collections.abc import Iterator
+from contextlib import ExitStack
+from typing import Any
 
+import gfmodules.logging as gflog
 import pytest
+from gfmodules.logging import LoggingStreams, bind_context
+from gfmodules.logging.formatter import JsonFormatter
+from gfmodules.logging.testing import capture_stream
 
-from app.logging.context import correlation_id_var, endpoint_var, ip_var, method_var, request_id_var
 from app.logging.events import NviLog, PrsLog
-from app.logging.filters import AppFilter, LoggingStreams, SiemFilter
-from app.logging.formatter import JsonFormatter
+
+_LOGGER_NAME = "app.test_stream_routing"
+
+Messages = list[dict[str, Any]]
+Streams = tuple[logging.Logger, Messages, Messages]
 
 
 @pytest.fixture
-def streams() -> Iterator[tuple[logging.Logger, io.StringIO, io.StringIO]]:
-    app_buf, siem_buf = io.StringIO(), io.StringIO()
+def streams() -> Iterator[Streams]:
+    logger = logging.getLogger(_LOGGER_NAME)
 
-    app_handler = logging.StreamHandler(app_buf)
-    app_handler.addFilter(AppFilter())
-    app_handler.setFormatter(JsonFormatter(include_traces=False, stream=LoggingStreams.APP))
-
-    siem_handler = logging.StreamHandler(siem_buf)
-    siem_handler.addFilter(SiemFilter())
-    siem_handler.setFormatter(JsonFormatter(include_traces=False, stream=LoggingStreams.SIEM))
-
-    logger = logging.getLogger("app.test_stream_routing")
-    logger.setLevel(logging.DEBUG)
-    logger.handlers = [app_handler, siem_handler]
-    logger.propagate = False
-
-    tokens = [
-        request_id_var.set("req-1"),
-        ip_var.set("10.0.0.1"),
-        endpoint_var.set("/validate"),
-        method_var.set("GET"),
-        correlation_id_var.set("corr-1"),
-    ]
-    try:
-        yield logger, app_buf, siem_buf
-    finally:
-        logger.handlers = []
-        request_id_var.reset(tokens[0])
-        ip_var.reset(tokens[1])
-        endpoint_var.reset(tokens[2])
-        method_var.reset(tokens[3])
-        correlation_id_var.reset(tokens[4])
-
-
-def _messages(buf: io.StringIO) -> list[dict[str, Any]]:
-    return [json.loads(line)["message"] for line in buf.getvalue().splitlines()]
+    with ExitStack() as stack:
+        app_messages = stack.enter_context(capture_stream(LoggingStreams.APP, _LOGGER_NAME))
+        siem_messages = stack.enter_context(capture_stream(LoggingStreams.SIEM, _LOGGER_NAME))
+        stack.enter_context(
+            bind_context(
+                {
+                    "request_id": "req-1",
+                    "ip": "10.0.0.1",
+                    "endpoint": "/validate",
+                    "method": "GET",
+                    "correlation_id": "corr-1",
+                }
+            )
+        )
+        yield logger, app_messages, siem_messages
 
 
 def test_binding_mismatch_withholds_endpoint_from_siem(
-    streams: tuple[logging.Logger, io.StringIO, io.StringIO],
+    streams: Streams,
 ) -> None:
-    logger, app_buf, siem_buf = streams
-    NviLog.event(
+    logger, app_messages, siem_messages = streams
+    gflog.emit(
         logger,
         NviLog.MTLS_BINDING_MISMATCH,
         "mismatch",
-        jwt_ura="00000123",
-        cert_thumbprint_jwt="abc",
-        cert_thumbprint_presented="def",
-        client_id="00000001",
+        fields={
+            "jwt_ura": "00000123",
+            "cert_thumbprint_jwt": "abc",
+            "cert_thumbprint_presented": "def",
+            "client_id": "00000001",
+        },
     )
 
-    app_msg = _messages(app_buf)[0]
-    siem_msg = _messages(siem_buf)[0]
+    app_msg = app_messages[0]
+    siem_msg = siem_messages[0]
 
     # APP (stroom 2) includes endpoint; SIEM (stroom 3) does not for NVI-AUTH-002
     assert app_msg["endpoint"] == "/validate"
@@ -81,21 +73,18 @@ def test_binding_mismatch_withholds_endpoint_from_siem(
 
 
 def test_authorization_mismatch_drops_resource_id_and_method_from_siem(
-    streams: tuple[logging.Logger, io.StringIO, io.StringIO],
+    streams: Streams,
 ) -> None:
-    logger, app_buf, siem_buf = streams
-    NviLog.event(
+    logger, app_messages, siem_messages = streams
+    gflog.emit(
         logger,
         NviLog.URA_AUTHORIZATION_MISMATCH,
         "mismatch",
-        jwt_ura="00000123",
-        resource_ura="00000001",
-        resource_id="00000002",
-        client_id="00000001",
+        fields={"jwt_ura": "00000123", "resource_ura": "00000001", "resource_id": "00000002", "client_id": "00000001"},
     )
 
-    app_msg = _messages(app_buf)[0]
-    siem_msg = _messages(siem_buf)[0]
+    app_msg = app_messages[0]
+    siem_msg = siem_messages[0]
 
     # APP keeps resource_id + method; SIEM keeps neither
     assert app_msg["resource_id"] == "00000002"
@@ -108,20 +97,18 @@ def test_authorization_mismatch_drops_resource_id_and_method_from_siem(
 
 
 def test_success_keeps_thumbprint_prefix_only_in_app(
-    streams: tuple[logging.Logger, io.StringIO, io.StringIO],
+    streams: Streams,
 ) -> None:
-    logger, app_buf, siem_buf = streams
-    NviLog.event(
+    logger, app_messages, siem_messages = streams
+    gflog.emit(
         logger,
         NviLog.AUTHENTICATION_SUCCESS,
         "ok",
-        ura_number="00000123",
-        cert_thumbprint_prefix="validthu",
-        scope="test-scope",
+        fields={"ura_number": "00000123", "cert_thumbprint_prefix": "validthu", "scope": "test-scope"},
     )
 
-    app_msg = _messages(app_buf)[0]
-    siem_msg = _messages(siem_buf)[0]
+    app_msg = app_messages[0]
+    siem_msg = siem_messages[0]
 
     assert app_msg["cert_thumbprint_prefix"] == "validthu"
     assert "cert_thumbprint_prefix" not in siem_msg  # not in SIEM allow-list for 004
@@ -133,21 +120,23 @@ def test_success_keeps_thumbprint_prefix_only_in_app(
 
 
 def test_prs_success_keeps_thumbprint_prefix_only_in_app(
-    streams: tuple[logging.Logger, io.StringIO, io.StringIO],
+    streams: Streams,
 ) -> None:
-    logger, app_buf, siem_buf = streams
-    PrsLog.event(
+    logger, app_messages, siem_messages = streams
+    gflog.emit(
         logger,
         PrsLog.AUTHENTICATION_SUCCESS,
         "ok",
-        handelende_oin="00000001123456700000",
-        ura_number="00000123",  # NVI field, dropped by the PRS allow-lists
-        cert_thumbprint_prefix="validthu",
-        scope="test-scope",
+        fields={
+            "handelende_oin": "00000001123456700000",
+            "ura_number": "00000123",
+            "cert_thumbprint_prefix": "validthu",
+            "scope": "test-scope",
+        },
     )
 
-    app_msg = _messages(app_buf)[0]
-    siem_msg = _messages(siem_buf)[0]
+    app_msg = app_messages[0]
+    siem_msg = siem_messages[0]
 
     assert app_msg["cert_thumbprint_prefix"] == "validthu"
     assert "cert_thumbprint_prefix" not in siem_msg  # not in SIEM allow-list for PRS-AUTH-004
@@ -161,20 +150,22 @@ def test_prs_success_keeps_thumbprint_prefix_only_in_app(
 
 
 def test_prs_token_binding_drops_failure_reason_from_siem(
-    streams: tuple[logging.Logger, io.StringIO, io.StringIO],
+    streams: Streams,
 ) -> None:
-    logger, app_buf, siem_buf = streams
-    PrsLog.event(
+    logger, app_messages, siem_messages = streams
+    gflog.emit(
         logger,
         PrsLog.TOKEN_BINDING_INVALID,
         "missing cnf claim",
-        handelende_oin="00000001123456700000",
-        failure_reason="missing_cnf_claim",
-        cert_thumbprint_presented="presentedthumb",  # NVI 002 field, not in PRS-AUTH-007
+        fields={
+            "handelende_oin": "00000001123456700000",
+            "failure_reason": "missing_cnf_claim",
+            "cert_thumbprint_presented": "presentedthumb",
+        },
     )
 
-    app_msg = _messages(app_buf)[0]
-    siem_msg = _messages(siem_buf)[0]
+    app_msg = app_messages[0]
+    siem_msg = siem_messages[0]
 
     assert app_msg["failure_reason"] == "missing_cnf_claim"
     assert "failure_reason" not in siem_msg  # not in SIEM allow-list for PRS-AUTH-007
@@ -203,7 +194,7 @@ def test_records_carry_stream_id_and_application_id() -> None:
     logger.handlers = [handler]
     logger.propagate = False
     try:
-        NviLog.event(logger, NviLog.AUTHENTICATION_SUCCESS, "authenticated", ura_number="12345678")
+        gflog.emit(logger, NviLog.AUTHENTICATION_SUCCESS, "authenticated", fields={"ura_number": "12345678"})
     finally:
         logger.handlers = []
 

@@ -1,9 +1,9 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from gfmodules.logging import CORRELATION_ID_HEADER, bind_context
 from requests.exceptions import HTTPError, Timeout
 
-from app.logging.context import CORRELATION_ID_HEADER, correlation_id_var
 from app.services.http_service import HttpService
 
 PATCHED_MODULE = "app.services.http_service.request"
@@ -126,11 +126,8 @@ def test_do_request_without_mtls_cert(response: MagicMock) -> None:
 
 @patch(PATCHED_MODULE)
 def test_do_request_propagates_the_correlation_id(response: MagicMock, http_service: HttpService) -> None:
-    token = correlation_id_var.set("some-generated-id")
-    try:
+    with bind_context({"correlation_id": "some-generated-id"}):
         http_service.do_request("GET")
-    finally:
-        correlation_id_var.reset(token)
 
     assert response.call_args.kwargs["headers"][CORRELATION_ID_HEADER] == "some-generated-id"
 
@@ -152,10 +149,7 @@ def test_do_request_omits_the_correlation_id_when_absent(response: MagicMock, ht
 @patch(PATCHED_MODULE)
 def test_do_request_does_not_mutate_the_caller_headers(response: MagicMock, http_service: HttpService) -> None:
     headers = {"Authorization": "Bearer x"}
-    token = correlation_id_var.set("some-generated-id")
-    try:
+    with bind_context({"correlation_id": "some-generated-id"}):
         http_service.do_request("GET", headers=headers)
-    finally:
-        correlation_id_var.reset(token)
 
     assert headers == {"Authorization": "Bearer x"}
