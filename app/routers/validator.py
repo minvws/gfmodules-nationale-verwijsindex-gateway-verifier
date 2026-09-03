@@ -4,7 +4,6 @@ from typing import Annotated
 
 import gfmodules.logging as gflog
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from gfmodules.logging import RESERVED_FIELDS
 from starlette.responses import JSONResponse
 
 from app.config import Config, get_config
@@ -15,14 +14,6 @@ from app.services.jwt import JwtException, JWTService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-def _loggable(claims: dict[str, object]) -> dict[str, object]:
-    """Claims come from the token, so a caller chooses their names. A claim named
-    after a LogRecord attribute is rejected by emit, which would turn a rejected
-    token into a 500.
-    """
-    return {name: value for name, value in claims.items() if name not in RESERVED_FIELDS}
 
 
 def _aud_str(aud: object) -> str:
@@ -104,7 +95,7 @@ def _validate_oin(
                 "client_organization_id": auth_headers.client_organization_id,
                 "client_common_name": auth_headers.client_common_name,
                 "failure_reason": "oin_mismatch",
-                **_loggable(claims),
+                "claims": claims,
             },
         )
         return Response("Missing `act` in claims", status_code=400)
@@ -119,7 +110,7 @@ def _validate_oin(
                 "client_organization_id": auth_headers.client_organization_id,
                 "client_common_name": auth_headers.client_common_name,
                 "failure_reason": "missing_oin_claim",
-                **_loggable(claims),
+                "claims": claims,
             },
         )
         return Response("Missing OIN claim in token", status_code=400)
@@ -133,7 +124,7 @@ def _validate_oin(
                 "client_organization_id": auth_headers.client_organization_id,
                 "client_common_name": auth_headers.client_common_name,
                 "failure_reason": "oin_mismatch",
-                **_loggable(claims),
+                "claims": claims,
             },
         )
         return Response("Certificate OIN does not match JWT OIN", status_code=400)
@@ -148,7 +139,7 @@ def _validate_oin(
                 "client_organization_id": auth_headers.client_organization_id,
                 "client_common_name": auth_headers.client_common_name,
                 "failure_reason": "oin_mismatch",
-                **_loggable(claims),
+                "claims": claims,
             },
         )
 
@@ -166,7 +157,7 @@ def _validate_oin(
 
     if claims.get("source_id"):
         headers["x-gf-source-id"] = str(claims["source_id"])
-    gflog.emit(logger, log.AUTHENTICATION_SUCCESS, "successfully validated JWT + Client", fields=_loggable(claims))
+    gflog.emit(logger, log.AUTHENTICATION_SUCCESS, "successfully validated JWT + Client", fields={"claims": claims})
 
     return JSONResponse(headers, status_code=200)
 

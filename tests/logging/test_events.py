@@ -93,10 +93,3 @@ class TestCatalogueSelection:
 
     def test_the_selection_covers_every_configured_log_type(self) -> None:
         assert {ApplicationLogType.nvi, ApplicationLogType.prs} == set(ApplicationLogType)
-
-
-class TestClaimsAreNotTrusted:
-    def test_a_claim_named_after_a_record_attribute_is_dropped(self) -> None:
-        from app.routers.validator import _loggable
-
-        assert _loggable({"scope": "read", "name": "spoofed", "message": "spoofed"}) == {"scope": "read"}
