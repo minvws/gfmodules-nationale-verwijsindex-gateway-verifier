@@ -1,19 +1,26 @@
+import json
 import logging
-from logging.config import dictConfig
+import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
+import gfmodules.logging as gflog
 import uvicorn
 from fastapi import FastAPI
+from gfmodules.logging.middleware import RequestContextMiddleware
 
 from app import container
-from app.config import get_config
-from app.logging.config_builder import LogConfigBuilder
-from app.logging.middleware import RequestContextMiddleware
+from app.config import _ENVIRONMENT_CONFIG_PATH_NAME, _PATH, get_config
+from app.logging.events import get_application_log
 from app.middleware.stats import StatsdMiddleware
 from app.routers.default import router as default_router
 from app.routers.health import router as health_router
 from app.routers.proxy import router as proxy_router
 from app.routers.validator import router as validate_router
+
+logger = logging.getLogger(__name__)
 
 
 def get_uvicorn_params() -> dict[str, Any]:
@@ -42,24 +49,54 @@ def run() -> None:
     uvicorn.run("app.application:create_fastapi_app", **get_uvicorn_params())
 
 
-def create_fastapi_app() -> FastAPI:
+def application_init() -> None:
     setup_logging()
-    fastapi = setup_fastapi()
+    gflog.install_excepthook(logger)
+    gflog.install_signal_handlers()
 
-    return fastapi
+
+def create_fastapi_app() -> FastAPI:
+    application_init()
+    try:
+        return setup_fastapi()
+    except Exception as exc:
+        gflog.emit(
+            logger,
+            gflog.active_catalogue().SYS_UNHANDLED_EXCEPTION,
+            "Unhandled exception during application startup",
+            fields={"exception_type": type(exc).__name__},
+            exc_info=exc,
+        )
+        raise
 
 
 def setup_logging() -> None:
     config = get_config()
-    loglevel = config.app.loglevel.upper()
-    if loglevel not in logging.getLevelNamesMapping():
-        raise ValueError(f"Invalid loglevel {loglevel}")
+    gflog.configure(
+        config=config.logging,
+        loglevel=config.app.loglevel,
+        catalogue=get_application_log(),
+    )
 
-    log_config = LogConfigBuilder(
-        loglevel=loglevel,
-        logging_config=config.logging,
-    ).build()
-    dictConfig(log_config)
+
+def _read_version() -> str:
+    path = Path(__file__).parent.parent / "version.json"
+    try:
+        with open(path, "r") as fh:
+            data = json.load(fh)
+            return str(data.get("version", "unknown"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return "unknown"
+
+
+@asynccontextmanager
+async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
+    async with gflog.lifespan_logging(
+        logger,
+        version=_read_version(),
+        config_path=os.environ.get(_ENVIRONMENT_CONFIG_PATH_NAME, _PATH),
+    ):
+        yield
 
 
 def setup_fastapi() -> FastAPI:
@@ -70,9 +107,10 @@ def setup_fastapi() -> FastAPI:
             docs_url=config.uvicorn.docs_url,
             redoc_url=config.uvicorn.redoc_url,
             title="Localisation API",
+            lifespan=_lifespan,
         )
         if config.uvicorn.swagger_enabled
-        else FastAPI(docs_url=None, redoc_url=None)
+        else FastAPI(docs_url=None, redoc_url=None, lifespan=_lifespan)
     )
 
     container.configure()
@@ -88,6 +126,7 @@ def setup_fastapi() -> FastAPI:
     fastapi.add_middleware(
         RequestContextMiddleware,
         correlation_id_expected=config.logging.correlation_id_expected,
+        trust_forwarded_for=config.logging.trust_forwarded_for,
     )
 
     return fastapi

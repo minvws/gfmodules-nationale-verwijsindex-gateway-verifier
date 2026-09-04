@@ -1,31 +1,21 @@
 import hashlib
 import logging
-from collections.abc import Mapping
-from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from typing import ClassVar
+
+from gfmodules.logging import DefaultEventCatalogue, LogEvent, LoggingStreams
 
 from app.config import ApplicationLogType, get_config
-from app.logging.filters import LoggingStreams
 
 _APP = LoggingStreams.APP
 _SIEM = LoggingStreams.SIEM
+
+_Base = DefaultEventCatalogue
 
 # Length of the certificate thumbprint prefix logged on success (never the full value).
 _THUMBPRINT_PREFIX_LEN = 8
 
 
-@dataclass(frozen=True)
-class LogEvent:
-    event_id: str
-    level: int
-    streams: tuple[LoggingStreams, ...]
-    # Per-stream allow-list of field names. APP == "stroom 2", SIEM == "stroom 3".
-    # When empty, no per-field routing is applied and every field is sent to all
-    # streams in ``streams``.
-    fields: Mapping[LoggingStreams, tuple[str, ...]] = field(default_factory=dict)
-
-
-class BaseLog:
+class BaseLog(_Base):
     """Audit events for the gateway verifier.
 
     The verifier can front different systems (NVI, PRS) that each define their
@@ -44,7 +34,6 @@ class BaseLog:
     URA_AUTHORIZATION_MISMATCH: ClassVar[LogEvent]
     AUTHENTICATION_SUCCESS: ClassVar[LogEvent]
     MISSING_AUTHORIZATION_HEADER: ClassVar[LogEvent]
-    SYS_MISSING_CORRELATION_ID: ClassVar[LogEvent]
 
     @staticmethod
     def thumbprint_prefix(value: str | None) -> str | None:
@@ -62,24 +51,6 @@ class BaseLog:
         if not value:
             return None
         return hashlib.sha256(value.encode("ascii")).hexdigest()[:16]
-
-    @staticmethod
-    def event(
-        logger: logging.Logger,
-        event: LogEvent,
-        message: str,
-        *,
-        exc_info: Any = None,
-        **fields: Any,
-    ) -> None:
-        extra: dict[str, Any] = {
-            "event_id": event.event_id,
-            "stream": list(event.streams),
-        }
-        if event.fields:
-            extra["field_streams"] = event.fields
-        extra.update(fields)
-        logger.log(event.level, message, extra=extra, exc_info=exc_info)
 
 
 class NviLog(BaseLog):
@@ -133,15 +104,19 @@ class NviLog(BaseLog):
             _SIEM: ("endpoint", "client_id"),
         },
     )
-    SYS_MISSING_CORRELATION_ID = LogEvent(  # NVI-SYS-006
-        "100606",
-        logging.ERROR,
-        (_APP, _SIEM),
-        {
+    SYS_APP_STARTED = _Base.SYS_APP_STARTED.with_id("100601")  # NVI-SYS-001
+    SYS_APP_STOPPED = _Base.SYS_APP_STOPPED.with_id("100602")  # NVI-SYS-002
+    SYS_APP_CRASHED = _Base.SYS_APP_CRASHED.with_id("100602")  # NVI-SYS-002
+    SYS_UNHANDLED_EXCEPTION = _Base.SYS_UNHANDLED_EXCEPTION.with_id("100604")  # NVI-SYS-004
+    SYS_MISSING_CORRELATION_ID = _Base.SYS_MISSING_CORRELATION_ID.replace(  # NVI-SYS-006
+        event_id="100606",
+        streams=(_APP, _SIEM),
+        fields={
             _APP: ("endpoint", "method"),
             _SIEM: ("endpoint", "method"),
         },
     )
+    ACCESS_REQUEST = _Base.ACCESS_REQUEST.with_id("094500")  # NVI-AUTH-101
 
 
 class PrsLog(BaseLog):
@@ -199,11 +174,14 @@ class PrsLog(BaseLog):
             _SIEM: ("endpoint", "handelende_oin"),
         },
     )
-    SYS_MISSING_CORRELATION_ID = LogEvent(  # PRS-SYS-007
-        "270407",
-        logging.ERROR,
-        (_APP, _SIEM),
-        {
+    SYS_APP_STARTED = _Base.SYS_APP_STARTED.with_id("270401")  # PRS-SYS-001
+    SYS_APP_STOPPED = _Base.SYS_APP_STOPPED.with_id("270402")  # PRS-SYS-002
+    SYS_APP_CRASHED = _Base.SYS_APP_CRASHED.with_id("270402")  # PRS-SYS-002
+    SYS_UNHANDLED_EXCEPTION = _Base.SYS_UNHANDLED_EXCEPTION.with_id("270404")  # PRS-SYS-004
+    SYS_MISSING_CORRELATION_ID = _Base.SYS_MISSING_CORRELATION_ID.replace(  # PRS-SYS-007
+        event_id="270407",
+        streams=(_APP, _SIEM),
+        fields={
             _APP: ("endpoint", "method"),
             _SIEM: ("endpoint", "method"),
         },

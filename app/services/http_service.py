@@ -1,10 +1,9 @@
 import logging
 from typing import Any, Literal
 
+from gfmodules.logging import correlation_headers
 from requests import HTTPError, Response, request
 from requests.exceptions import ConnectionError, Timeout
-
-from app.logging.context import CORRELATION_ID_HEADER, UNSET, correlation_id_var
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +46,7 @@ class HttpService:
 
             url = f"{self._endpoint}/{sub_route}" if sub_route else self._endpoint
 
-            outgoing_headers = dict(headers or {})
-            correlation_id = correlation_id_var.get()
-            if correlation_id != UNSET:
-                outgoing_headers[CORRELATION_ID_HEADER] = correlation_id
+            outgoing_headers = {**(headers or {}), **correlation_headers()}
 
             response = request(
                 method=method,

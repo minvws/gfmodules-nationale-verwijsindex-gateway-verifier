@@ -4,10 +4,10 @@ from typing import Annotated
 
 import requests as http_requests
 from fastapi import APIRouter, Depends, Request, Response
+from gfmodules.logging import CORRELATION_ID_HEADER
 
 from app.config import get_config
 from app.container import get_jwt_service
-from app.logging.context import CORRELATION_ID_HEADER
 from app.routers.validator import run_validate
 from app.services.jwt import JWTService
 
