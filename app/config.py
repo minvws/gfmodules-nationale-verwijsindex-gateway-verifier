@@ -4,7 +4,7 @@ import os
 from enum import Enum
 from typing import Any
 
-from gfmodules.logging import ConfigLogging as BaseConfigLogging
+from gfmodules.logging import ConfigLogging as GFConfigLogging
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 logger = logging.getLogger(__name__)
@@ -32,17 +32,17 @@ class ApplicationLogType(str, Enum):
     prs = "prs"
 
 
-class ConfigLogging(BaseConfigLogging):
+class ConfigLogging(GFConfigLogging):
     # Which system's audit events are emitted (the verifier can front NVI or PRS,
     # and each has its own event IDs and field specs).
     application_log_type: ApplicationLogType = Field(default=ApplicationLogType.nvi)
 
     @field_validator("console_streams", mode="before")
     @classmethod
-    def parse_console_streams(cls, v: str | list[str]) -> str | list[str]:
-        if isinstance(v, str):
-            return [item.strip() for item in v.split(",") if item.strip()]
-        return v
+    def _split_console_streams(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
 
 
 class ConfigOin(BaseModel):
