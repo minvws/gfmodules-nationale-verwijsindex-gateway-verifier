@@ -37,6 +37,13 @@ class ConfigLogging(BaseConfigLogging):
     # and each has its own event IDs and field specs).
     application_log_type: ApplicationLogType = Field(default=ApplicationLogType.nvi)
 
+    @field_validator("console_streams", mode="before")
+    @classmethod
+    def parse_console_streams(cls, v: str | list[str]) -> str | list[str]:
+        if isinstance(v, str):
+            return [item.strip() for item in v.split(",") if item.strip()]
+        return v
+
 
 class ConfigOin(BaseModel):
     issuer: str

@@ -17,8 +17,9 @@ application_id = nationale-verwijsindex-gateway-verifier
 access_logs = False
 # Include exception/stack traces in JSON logs.
 include_traces = False
-# Display human-readable debug logs in the console instead of JSON.
-debug_logs_in_console = False
+# Which streams reach stdout as readable text: app, siem, debug (comma-separated).
+# Empty leaves stdout silent.
+console_streams = app,siem
 # Log an error when a request arrives without an X-GF-Correlation-ID header
 correlation_id_expected = False
 
