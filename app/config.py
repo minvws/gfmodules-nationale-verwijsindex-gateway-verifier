@@ -4,7 +4,8 @@ import os
 from enum import Enum
 from typing import Any
 
-from gfmodules.logging import ConfigLogging as BaseConfigLogging
+from gfmodules.logging import ConfigLogging as GFConfigLogging
+from gfmodules.logging.ini import split_comma_separated
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 logger = logging.getLogger(__name__)
@@ -32,10 +33,12 @@ class ApplicationLogType(str, Enum):
     prs = "prs"
 
 
-class ConfigLogging(BaseConfigLogging):
+class ConfigLogging(GFConfigLogging):
     # Which system's audit events are emitted (the verifier can front NVI or PRS,
     # and each has its own event IDs and field specs).
     application_log_type: ApplicationLogType = Field(default=ApplicationLogType.nvi)
+
+    _split_console_streams = field_validator("console_streams", mode="before")(split_comma_separated())
 
 
 class ConfigOin(BaseModel):
