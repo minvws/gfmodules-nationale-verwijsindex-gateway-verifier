@@ -116,7 +116,6 @@ class NviLog(BaseLog):
             _SIEM: ("endpoint", "method"),
         },
     )
-    ACCESS_REQUEST = _Base.ACCESS_REQUEST.with_id("094500")  # NVI-AUTH-101
 
 
 class PrsLog(BaseLog):
