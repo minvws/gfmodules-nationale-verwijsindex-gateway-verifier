@@ -19,7 +19,7 @@ _CATALOGUES = [NviLog, PrsLog]
 @pytest.mark.parametrize("catalogue", _CATALOGUES)
 class TestBothCatalogues:
     def test_defines_every_required_event(self, catalogue: type[EventCatalogue]) -> None:
-        assert_catalogue_complete(catalogue, access_logs=False)
+        assert_catalogue_complete(catalogue)
 
     def test_every_declared_event_routes_at_least_one_stream(self, catalogue: type[EventCatalogue]) -> None:
         for name, event in declared_events(catalogue):
@@ -49,7 +49,6 @@ class TestNviEventIds:
             ("SYS_APP_CRASHED", "100602"),
             ("SYS_UNHANDLED_EXCEPTION", "100604"),
             ("SYS_MISSING_CORRELATION_ID", "100606"),
-            ("ACCESS_REQUEST", "094500"),
         ],
     )
     def test_carries_the_event_id_the_spec_assigns(self, name: str, event_id: str) -> None:

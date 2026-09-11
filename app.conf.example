@@ -14,7 +14,7 @@ loglevel=debug
 # so the log server can tell apart applications sharing the channel.
 application_id = nationale-verwijsindex-gateway-verifier
 # Emit an access record per request.
-access_logs = False
+access_logs = True
 # Include exception/stack traces in JSON logs.
 include_traces = False
 # Which streams reach stdout as readable text: app, siem, debug (comma-separated).
