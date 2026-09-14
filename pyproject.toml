@@ -11,7 +11,7 @@ include = [{ path = "version.json" }]
 exclude = ["app/debug"]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.14"
 uvicorn = "0.52.4"
 fastapi = ">=0.135,<0.142"
 pydantic-settings = "^2.13.0"
@@ -54,7 +54,7 @@ line-length = 120
 
 [tool.mypy]
 files = "app,tests"
-python_version = "3.11"
+python_version = "3.14"
 strict = true
 cache_dir = "~/.cache/mypy"
 ignore_missing_imports = true
