@@ -8,3 +8,4 @@ secrets/
 *.pub
 coverage.xml
 .venv
+version.json
