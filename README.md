@@ -24,12 +24,25 @@ This app is the Gateway Verifier for the NVI and PRS and is part of the 'Generie
 
 ## What This Service Does
 
-Validation behavior:
+In production, Kong processes a protected request in this order:
 
-In a normal deployment, our `cert-info` Kong plugin populates `X-GF-Act-Sub` and
-`X-GF-Act-Cn` before forwarding the request. The verifier consumes these
-gateway-supplied values and compares them with the JWT `act.sub` and `act.cn`
-claims.
+1. The `cert-info` Kong plugin injects `X-GF-Act-Sub` and `X-GF-Act-Cn`.
+2. The `gateway-verifier` Kong plugin requires a bearer token and those acting
+   identity headers, then calls the configured Gateway Verifier FastAPI
+   service's `/validate` endpoint through its `verifier_url`.
+3. The service validates the JWT and checks that `act.sub` and `act.cn` match
+   the supplied acting values. It does not perform certificate validation.
+4. On a `200` response, the `gateway-verifier` plugin injects the returned
+   `x-gf-*` identity values into the upstream request and Kong continues to the
+   backend.
+
+The Gateway Verifier service is deployed once for NVI and once for PRS. The
+corresponding `gateway-verifier` Kong plugin configuration points `verifier_url`
+to that deployment. A non-`200` response from the service is returned by the
+plugin as `401`; a connection failure or an invalid JSON response from the
+service becomes `502`.
+
+The Gateway Verifier service:
 
 - Requires `Authorization: Bearer <token>`, `X-GF-Act-Sub`, and `X-GF-Act-Cn`
 - Validates JWT signature and claims (`iss`, `aud`, `exp`, `nbf`, `iat`) against configured issuer/audience and JWKS
@@ -44,9 +57,12 @@ On success, `/validate` returns these identity values as JSON:
 - `x-gf-act-sub`
 - `x-gf-act-cn`
 - `x-gf-organization-name`
-- `x-gf-source-id` (when the signed `source_id` claim is present)
+- `x-gf-source-id` (when the signed `source_id` claim has a value)
 
-For `/proxy`, non-null `x-gf-*` values from the validated identity are overlaid as request headers before forwarding. See [docs/kong.md](docs/kong.md) for proxy behavior details.
+For local development, where Kong is not handling verification, the
+development-only `/proxy` endpoint simulates the `gateway-verifier` Kong plugin
+by validating the request, setting the verified `x-gf-*` identity headers, and
+forwarding the request. See [docs/kong.md](docs/kong.md) for its behavior.
 
 ## Endpoints
 
@@ -54,10 +70,10 @@ For `/proxy`, non-null `x-gf-*` values from the validated identity are overlaid 
 - `GET /version.json` raw version metadata (`404` when missing)
 - `GET /health` service health response
 - `GET /validate` validates the bearer JWT and acting identity headers, then returns identity values as JSON
-- `GET|POST|PUT|PATCH|DELETE /proxy` and `/proxy/{upstream_path:path}` validate and forward requests to `kong_proxy.url` when enabled
-- `GET|POST|PUT|PATCH|DELETE /proxy/health` provides an unauthenticated backend health passthrough
+- Development-only: `GET|POST|PUT|PATCH|DELETE /proxy` and `/proxy/{upstream_path:path}` validate and forward requests to `kong_proxy.url` when enabled
+- Development-only: `GET|POST|PUT|PATCH|DELETE /proxy/health` provides an unauthenticated backend health passthrough
 
-See also [docs/kong.md](docs/kong.md) for proxy behavior details.
+See [docs/kong.md](docs/kong.md) for development proxy details.
 
 ## Getting Started
 
@@ -89,7 +105,7 @@ poetry install
 poetry run python -m app.main
 ```
 
-## Example Validate Call
+## Direct Validate Call
 
 ```bash
 curl -i http://localhost:8503/validate \
@@ -98,11 +114,11 @@ curl -i http://localhost:8503/validate \
   -H "X-GF-Act-Cn: <jwt-act-cn>"
 ```
 
-Because this direct/local example runs without Kong and our `cert-info` plugin,
-it supplies the gateway headers manually. They must match the JWT `act.sub` and
-`act.cn` claims.
+This direct call bypasses both the `cert-info` and `gateway-verifier` Kong
+plugins, so it supplies the acting headers manually. They must match the JWT
+`act.sub` and `act.cn` claims.
 
-Expected outcomes:
+Expected direct service responses:
 
 - `200` for a valid JWT with matching acting identity values
 - `400` for JWT verification failures, required claim failures, or acting identity mismatches
