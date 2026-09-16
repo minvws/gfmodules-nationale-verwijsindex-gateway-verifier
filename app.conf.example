@@ -30,12 +30,13 @@ issuer=https://oauth-service
 audience=nvi,foo,bar
 # URL of the JWKS endpoint to fetch the public keys for validating the access token
 jwks_url=http://localhost:8532/oauth/jwks.json
-# mTLS certificate for connecting to the issuer
-mtls_cert=secrets/dummy-oin.crt
-# mTLS key for connecting to the issuer
-mtls_key=secrets/dummy-oin.key
-# CA verification
-verify_ca=secrets/dummy-oin-server-ca.crt
+# Optional mTLS certificate for connecting to the issuer
+mtls_cert=
+# Optional mTLS key for connecting to the issuer
+mtls_key=
+# Verify the issuer certificate using the system CA store. Set to False to
+# disable verification or provide a CA bundle path.
+verify_ca=True
 
 [telemetry]
 # Telemetry is enabled or not

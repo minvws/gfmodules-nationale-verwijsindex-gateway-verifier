@@ -1,25 +1,38 @@
 # Kong Proxy
 
-The `/proxy` endpoint acts as an authenticated gateway that validates an incoming request and forwards it to a 
-configured backend URL. It can be enabled when developing locally and are not using a Kong system to handle 
-verification.
-
-This way, you can curl a request to the /proxy, and still have the verifier to run and enrich the headers before 
-forwarding it to your backend.
+The `/proxy` endpoint is an authenticated gateway that validates a request and
+forwards it to a configured backend URL. Enable it for local development when
+Kong is not handling verification.
 
 ## How it works
 
-1. The client sends a request to `/proxy` using any HTTP method (GET, POST, PUT, PATCH, DELETE), including the 
-   usual `Authorization: Bearer <token>` header and an mTLS client certificate.
-2. The gateway runs the same validation logic as `/validate`:
-   - Verifies the mTLS certificate is a valid OIN certificate
-   - Verifies the JWT signature, issuer, audience, and expiry
-   - Checks that the OIN in the JWT matches the OIN in the certificate
-3. If validation fails, the error response is returned directly to the client (no forwarding).
-4. If validation succeeds, the identity fields from the validation result are added as HTTP headers (`X-Oin-Number`, 
-   `X-Ura-Number`, `X-Source-Id`, `X-Audience`).
-5. The original request body is forwarded to `kong_proxy.url` using the same HTTP method, with those headers attached.
-6. The backend response is returned as-is to the client.
+1. For protected paths, `/proxy` accepts GET, POST, PUT, PATCH, and DELETE
+   requests carrying `Authorization: Bearer <token>`, `X-GF-Act-Sub`, and
+   `X-GF-Act-Cn` headers. Our `cert-info` Kong plugin normally populates the two
+   `X-GF-Act-*` headers before forwarding the request; direct and local callers
+   provide them manually to emulate the plugin.
+2. The gateway verifies the JWT signature and its configured issuer, audience,
+   and time claims (`exp`, `nbf`, and `iat`). It then compares the JWT
+   `act.sub` and `act.cn` claims with `X-GF-Act-Sub` and `X-GF-Act-Cn`.
+3. Validation failures are returned to the client and are not forwarded to the
+   backend.
+4. After successful validation, the gateway strips caller-supplied `x-gf-*`
+   headers, except `X-GF-Correlation-ID` when `allow_client_correlation_id` is
+   enabled, then overlays verified identity values. It normally produces
+   `x-gf-cert-type`, `x-gf-audience`, `x-gf-scope`, `x-gf-act-sub`, and
+   `x-gf-act-cn`. An absent `scope` claim produces `x-gf-scope` with an empty
+   value; an explicitly null `scope` claim omits that header. It forwards
+   `x-gf-sub` and `x-gf-organization-name` only when their JWT claims are
+   non-null. When `source_id` is present in the signed JWT, it also adds
+   `x-gf-source-id`.
+5. The original HTTP method, path below `/proxy`, query string, and request
+   body are forwarded to `kong_proxy.url` with those headers attached.
+6. The backend response status, body, and response headers are returned to the
+   client.
+
+`/proxy/health` is an unauthenticated health passthrough. It bypasses JWT
+validation and forwards to the backend without injecting verified identity
+headers.
 
 ## Configuration
 
@@ -29,24 +42,30 @@ Add a `[kong_proxy]` section to `app.conf`:
 [kong_proxy]
 enabled = True
 url = https://your-kong-service/path
+allow_client_correlation_id = False
 ```
 
-| Setting   | Description                                      |
-|-----------|--------------------------------------------------|
-| `enabled` | Set to `True` to activate the proxy endpoint     |
-| `url`     | The backend URL to forward validated requests to |
+| Setting | Description |
+|---------|-------------|
+| `enabled` | Set to `True` to activate the proxy endpoint. |
+| `url` | The backend URL to which validated requests are forwarded. |
+| `allow_client_correlation_id` | When `True`, forward the client-supplied `X-GF-Correlation-ID`; otherwise strip it. |
 
-When `enabled = False`, the `/proxy` endpoint returns `503 Service Unavailable`.
+When `enabled = False`, `/proxy` returns `503 Service Unavailable`.
 
 ## Local development
 
-For local development you can point `url` at [httpbin](https://httpbin.org), which echoes back the headers it receives — useful for 
-verifying that the enriched headers are being forwarded correctly.
+For local development without Kong and our `cert-info` plugin, point `url` at
+[httpbin](https://httpbin.org), which echoes back the headers it receives — useful
+for verifying that the enriched headers are being forwarded correctly. Supply
+`X-GF-Act-Sub` and `X-GF-Act-Cn` manually, using values that match the signed
+JWT's `act.sub` and `act.cn` claims:
 
 ```ini
 [kong_proxy]
 enabled = True
 url = https://httpbin.org/headers
+allow_client_correlation_id = False
 ```
 
 Then send a request:
@@ -54,19 +73,11 @@ Then send a request:
 ```bash
 curl -X POST http://localhost:8503/proxy \
   -H "Authorization: Bearer <your-jwt>" \
-  -H "X-Forwarded-Tls-Client-Cert: <url-encoded-pem>" \
+  -H "X-GF-Act-Sub: <jwt-act-sub>" \
+  -H "X-GF-Act-Cn: <jwt-act-cn>" \
   -H "Content-Type: application/json" \
   -d '{"example": "body"}'
 ```
 
-The response from httpbin will show the `X-Oin-Number`, `X-Ura-Number`, `X-Source-Id`, and 
-`X-Audience` headers that were injected by the gateway.
-
-To test with a specific source ID, add the `X-Source-Id` header:
-
-```bash
-curl -X GET http://localhost:8503/proxy \
-  -H "Authorization: Bearer <your-jwt>" \
-  -H "X-Forwarded-Tls-Client-Cert: <url-encoded-pem>" \
-  -H "X-Source-Id: my-source-system"
-```
+The response from httpbin will show the verified `x-gf-*` identity headers that
+were injected by the gateway.
