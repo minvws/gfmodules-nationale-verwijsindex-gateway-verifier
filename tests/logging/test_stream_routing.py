@@ -185,7 +185,7 @@ def test_records_carry_stream_id_and_application_id() -> None:
             include_traces=False,
             stream=LoggingStreams.APP,
             stream_id="app",
-            application_id="nationale-verwijsindex-gateway-verifier",
+            application_id="gateway-verifier",
         )
     )
 
@@ -200,4 +200,4 @@ def test_records_carry_stream_id_and_application_id() -> None:
 
     record = json.loads(buf.getvalue())
     assert record["stream_id"] == "app"
-    assert record["application_id"] == "nationale-verwijsindex-gateway-verifier"
+    assert record["application_id"] == "gateway-verifier"

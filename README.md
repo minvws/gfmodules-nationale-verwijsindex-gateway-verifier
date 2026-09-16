@@ -1,6 +1,6 @@
-# NVI Gateway Verifier
+# Gateway Verifier
 
-This app is the Nationale Verwijsindex Gateway Verifier and is part of the 'Generieke Functies, lokalisatie en addressering' project of the Ministry of Health, Welfare and Sport of the Dutch government. This repository contains a FastAPI service that validates protected gateway requests using a bearer JWT and the acting identity supplied by the gateway. It can also proxy successfully validated requests to a configured backend URL.
+This app is the Gateway Verifier for the NVI and PRS and is part of the 'Generieke Functies, lokalisatie en addressering' project of the Ministry of Health, Welfare and Sport of the Dutch government. This repository contains a FastAPI service that validates protected gateway requests using a bearer JWT and the acting identity supplied by the gateway.
 
 > [!CAUTION]
 >
