@@ -52,6 +52,9 @@ cache-dir = "~/.cache/ruff"
 include = ["pyproject.toml", "app/*.py", "tests/*.py"]
 line-length = 120
 
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "Q"]
+
 [tool.mypy]
 files = "app,tests"
 python_version = "3.14"
