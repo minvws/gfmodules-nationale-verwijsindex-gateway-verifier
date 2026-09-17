@@ -9,7 +9,7 @@ from typing import Any
 
 import gfmodules.logging as gflog
 import pytest
-from gfmodules.logging import LoggingStreams, bind_context
+from gfmodules.logging import LoggingStreams, bind_context, update_context
 from gfmodules.logging.formatter import JsonFormatter
 from gfmodules.logging.testing import capture_stream
 
@@ -42,7 +42,7 @@ def streams() -> Iterator[Streams]:
         yield logger, app_messages, siem_messages
 
 
-def test_binding_mismatch_withholds_endpoint_from_siem(
+def test_binding_mismatch_keeps_endpoint_in_both_streams(
     streams: Streams,
 ) -> None:
     logger, app_messages, siem_messages = streams
@@ -61,18 +61,14 @@ def test_binding_mismatch_withholds_endpoint_from_siem(
     app_msg = app_messages[0]
     siem_msg = siem_messages[0]
 
-    # APP (stroom 2) includes endpoint; SIEM (stroom 3) does not for NVI-AUTH-002
-    assert app_msg["endpoint"] == "/validate"
-    assert "endpoint" not in siem_msg
-
-    # both streams keep the thumbprints + client_id + jwt_ura
     for msg in (app_msg, siem_msg):
+        assert msg["endpoint"] == "/validate"
         assert msg["jwt_ura"] == "00000123"
         assert msg["cert_thumbprint_presented"] == "def"
         assert msg["client_id"] == "00000001"
 
 
-def test_authorization_mismatch_drops_resource_id_and_method_from_siem(
+def test_authorization_mismatch_drops_resource_id_from_siem(
     streams: Streams,
 ) -> None:
     logger, app_messages, siem_messages = streams
@@ -86,11 +82,10 @@ def test_authorization_mismatch_drops_resource_id_and_method_from_siem(
     app_msg = app_messages[0]
     siem_msg = siem_messages[0]
 
-    # APP keeps resource_id + method; SIEM keeps neither
     assert app_msg["resource_id"] == "00000002"
-    assert app_msg["method"] == "GET"
     assert "resource_id" not in siem_msg
-    assert "method" not in siem_msg
+    assert app_msg["method"] == "GET"
+    assert siem_msg["method"] == "GET"
     # resource_ura/jwt_ura in both
     assert siem_msg["resource_ura"] == "00000001"
     assert siem_msg["jwt_ura"] == "00000123"
@@ -100,12 +95,13 @@ def test_success_keeps_thumbprint_prefix_only_in_app(
     streams: Streams,
 ) -> None:
     logger, app_messages, siem_messages = streams
-    gflog.emit(
-        logger,
-        NviLog.AUTHENTICATION_SUCCESS,
-        "ok",
-        fields={"ura_number": "00000123", "cert_thumbprint_prefix": "validthu", "scope": "test-scope"},
-    )
+    with update_context({"scope": "test-scope"}):
+        gflog.emit(
+            logger,
+            NviLog.AUTHENTICATION_SUCCESS,
+            "ok",
+            fields={"ura_number": "00000123", "cert_thumbprint_prefix": "validthu"},
+        )
 
     app_msg = app_messages[0]
     siem_msg = siem_messages[0]
@@ -123,17 +119,17 @@ def test_prs_success_keeps_thumbprint_prefix_only_in_app(
     streams: Streams,
 ) -> None:
     logger, app_messages, siem_messages = streams
-    gflog.emit(
-        logger,
-        PrsLog.AUTHENTICATION_SUCCESS,
-        "ok",
-        fields={
-            "handelende_oin": "00000001123456700000",
-            "ura_number": "00000123",
-            "cert_thumbprint_prefix": "validthu",
-            "scope": "test-scope",
-        },
-    )
+    with update_context({"scope": "test-scope"}):
+        gflog.emit(
+            logger,
+            PrsLog.AUTHENTICATION_SUCCESS,
+            "ok",
+            fields={
+                "handelende_oin": "00000001123456700000",
+                "ura_number": "00000123",
+                "cert_thumbprint_prefix": "validthu",
+            },
+        )
 
     app_msg = app_messages[0]
     siem_msg = siem_messages[0]
