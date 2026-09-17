@@ -91,4 +91,4 @@ class TestCatalogueSelection:
             assert catalogue.SYS_MISSING_CORRELATION_ID.streams == (_APP, _SIEM)
 
     def test_the_selection_covers_every_configured_log_type(self) -> None:
-        assert {ApplicationLogType.nvi, ApplicationLogType.prs} == set(ApplicationLogType)
+        assert set(ApplicationLogType) == {ApplicationLogType.nvi, ApplicationLogType.prs}

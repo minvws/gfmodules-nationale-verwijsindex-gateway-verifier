@@ -97,7 +97,7 @@ def untrusted_signing_key() -> jwk.JWK:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def jwt_service(trusted_signing_key: jwk.JWK, ps256_signing_key: jwk.JWK) -> JWTService:
     trusted_jwks = jwk.JWKSet()
     trusted_jwks.add(jwk.JWK.from_json(trusted_signing_key.export_public()))
@@ -147,9 +147,10 @@ def test_rejects_token_signed_by_untrusted_key(
 
 def test_rejects_corrupted_signature(jwt_service: JWTService, trusted_signing_key: jwk.JWK) -> None:
     token = sign_token(trusted_signing_key, valid_claims())
+    corrupted_token = corrupt_signature(token)
 
     with pytest.raises(JwtException):
-        jwt_service.verify(corrupt_signature(token), ISSUER, AUDIENCE)
+        jwt_service.verify(corrupted_token, ISSUER, AUDIENCE)
 
 
 def test_rejects_wrong_issuer(jwt_service: JWTService, trusted_signing_key: jwk.JWK) -> None:
