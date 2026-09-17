@@ -4,7 +4,7 @@ from typing import Annotated
 
 import gfmodules.logging as gflog
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, PlainTextResponse
 
 from app.config import Config, get_config
 from app.container import get_jwt_service
@@ -53,7 +53,7 @@ def run_validate(
             "malformed Authorization header",
             fields={"error_reason": "malformed_authorization_header", "token_present": True},
         )
-        return Response("Bearer authorization header is required", status_code=401, media_type="text/plain")
+        return PlainTextResponse("Bearer authorization header is required", status_code=401)
 
     token = auth_headers.bearer[len("Bearer ") :]
     return _validate_oin(
@@ -81,7 +81,7 @@ def _validate_oin(
             "failed to verify JWT",
             fields={"error_reason": str(e), "token_present": True},
         )
-        return Response("Token verification failed", status_code=400, media_type="text/plain")
+        return PlainTextResponse("Token verification failed", status_code=400)
 
     claims = json.loads(verified_token.claims)
 
@@ -98,7 +98,7 @@ def _validate_oin(
                 "claims": claims,
             },
         )
-        return Response("Missing `act` in claims", status_code=400, media_type="text/plain")
+        return PlainTextResponse("Missing `act` in claims", status_code=400)
 
     sub_org_id = act.get("sub")
     if not sub_org_id:
@@ -113,7 +113,7 @@ def _validate_oin(
                 "claims": claims,
             },
         )
-        return Response("Missing OIN claim in token", status_code=400, media_type="text/plain")
+        return PlainTextResponse("Missing OIN claim in token", status_code=400)
 
     if str(sub_org_id) != str(auth_headers.client_organization_id):
         gflog.emit(
@@ -127,7 +127,7 @@ def _validate_oin(
                 "claims": claims,
             },
         )
-        return Response("Certificate OIN does not match JWT OIN", status_code=400, media_type="text/plain")
+        return PlainTextResponse("Certificate OIN does not match JWT OIN", status_code=400)
 
     token_common_name = act.get("cn")
     if token_common_name != auth_headers.client_common_name:
@@ -143,7 +143,7 @@ def _validate_oin(
             },
         )
 
-        return Response("JWT `act.cn` does not match certificate CommonName", status_code=400, media_type="text/plain")
+        return PlainTextResponse("JWT `act.cn` does not match certificate CommonName", status_code=400)
 
     headers: dict[str, str] = {
         "x-gf-cert-type": "OIN",
