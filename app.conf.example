@@ -12,7 +12,7 @@ loglevel=debug
 # syslog_path = syslog:5514
 # Identifies this application in the JSON records (application_id field),
 # so the log server can tell apart applications sharing the channel.
-application_id = nationale-verwijsindex-gateway-verifier
+application_id = gateway-verifier
 # Emit an access record per request.
 access_logs = True
 # Include exception/stack traces in JSON logs.
@@ -30,12 +30,13 @@ issuer=https://oauth-service
 audience=nvi,foo,bar
 # URL of the JWKS endpoint to fetch the public keys for validating the access token
 jwks_url=http://localhost:8532/oauth/jwks.json
-# mTLS certificate for connecting to the issuer
-mtls_cert=secrets/dummy-oin.crt
-# mTLS key for connecting to the issuer
-mtls_key=secrets/dummy-oin.key
-# CA verification
-verify_ca=secrets/dummy-oin-server-ca.crt
+# Optional mTLS certificate for connecting to the issuer
+mtls_cert=
+# Optional mTLS key for connecting to the issuer
+mtls_key=
+# Verify the issuer certificate using the system CA store. Set to False to
+# disable verification or provide a CA bundle path.
+verify_ca=True
 
 [telemetry]
 # Telemetry is enabled or not
@@ -43,9 +44,9 @@ enabled = False
 # Endpoint to GRPC server for telemetry
 endpoint = http://tracing:4317
 # Service name to use
-service_name = Nationale Verwijsindex Gateway Verifier
+service_name = Gateway Verifier
 # Tracer name to use
-tracer_name = zmodules.service.nationale_verwijsindex_gateway_verifier
+tracer_name = zmodules.service.gateway_verifier
 
 [stats]
 # Statsd is enabled or not
@@ -55,7 +56,7 @@ host = 127.0.0.1
 # Port for statsd server
 port = 8125
 # Module name for statsd
-module_name = nationale-verwijsindex-gateway-verifier
+module_name = gateway-verifier
 
 
 [uvicorn]
@@ -84,7 +85,7 @@ ssl_key_file = server.key
 [kong_proxy]
 # Enable the /proxy for testing without kong infrastructure
 enabled = True
-# Url to proxy to. Could be a local NVI, or something like https://httpbin.org/headers
+# Url to proxy to. Could be a local NVI or PRS backend, or something like https://httpbin.org/headers
 url =
 # Forward a client-supplied X-GF-Correlation-ID to the backend instead of stripping
 # it with the other x-gf-* headers, so one request can be traced across services.

@@ -1,13 +1,6 @@
-# NVI Gateway Verifier
+# Gateway Verifier
 
-This app is the Nationale Verwijsindex Gateway Verifier and is part of the 'Generieke Functies, lokalisatie en addressering' project of the Ministry of Health, Welfare and Sport of the Dutch government. This repository contains a FastAPI service that verifies incoming gateway requests for OIN-based identity.
-It validates both:
-
-- The client certificate chain from `X-Forwarded-Tls-Client-Cert`
-- The bearer JWT from the `Authorization` header
-
-After successful validation, the service returns normalized identity headers, and it can optionally proxy
-the request to a configured backend URL.
+This app is the Gateway Verifier for the NVI and PRS and is part of the 'Generieke Functies, lokalisatie en addressering' project of the Ministry of Health, Welfare and Sport of the Dutch government. This repository contains a FastAPI service that validates protected gateway requests using a bearer JWT and the acting identity supplied by the gateway.
 
 > [!CAUTION]
 >
@@ -31,39 +24,60 @@ the request to a configured backend URL.
 
 ## What This Service Does
 
-The verifier combines mTLS certificate checks and JWT checks in one place.
+In production, Kong processes a protected request in this order:
 
-Validation behavior:
+1. The `cert-info` Kong plugin injects `X-GF-Act-Sub` and `X-GF-Act-Cn`.
+2. The `gateway-verifier` Kong plugin requires a bearer token and those acting
+   identity headers, then calls the configured Gateway Verifier FastAPI
+   service's `/validate` endpoint through its `verifier_url`.
+3. The service validates the JWT and checks that `act.sub` and `act.cn` match
+   the supplied acting values. It does not perform certificate validation.
+4. On a `200` response, the `gateway-verifier` plugin injects the returned
+   `x-gf-*` identity values into the upstream request and Kong continues to the
+   backend.
 
-- Requires `Authorization: Bearer <token>`
-- Requires a valid client certificate chain signed by the configured OIN CA
-- Extracts OIN from the leaf certificate `subject.serialNumber` (must be 20 digits)
+The Gateway Verifier service is deployed once for NVI and once for PRS. The
+corresponding `gateway-verifier` Kong plugin configuration points `verifier_url`
+to that deployment. A non-`200` response from the service is returned by the
+plugin as `401`; a connection failure or an invalid JSON response from the
+service becomes `502`.
+
+The Gateway Verifier service:
+
+- Requires `Authorization: Bearer <token>`, `X-GF-Act-Sub`, and `X-GF-Act-Cn`
 - Validates JWT signature and claims (`iss`, `aud`, `exp`, `nbf`, `iat`) against configured issuer/audience and JWKS
-- Verifies JWT `cnf["x5t#S256"]` matches the leaf certificate SHA-256 fingerprint
-- Verifies JWT OIN (`oin` or `oin_number`) matches certificate OIN
+- Requires JWT `act.sub` and `act.cn` to match `X-GF-Act-Sub` and `X-GF-Act-Cn`
 
-On success, identity headers are returned (and used by `/proxy`):
+On success, `/validate` returns these identity values as JSON:
 
 - `x-gf-cert-type`
 - `x-gf-audience`
 - `x-gf-scope`
-- `x-gf-oin` (if present in token)
-- `x-gf-source-id` (if present in token)
+- `x-gf-sub`
+- `x-gf-act-sub`
+- `x-gf-act-cn`
+- `x-gf-organization-name`
+- `x-gf-source-id` (when the signed `source_id` claim has a value)
+
+For local development, where Kong is not handling verification, the
+development-only `/proxy` endpoint simulates the `gateway-verifier` Kong plugin
+by validating the request, setting the verified `x-gf-*` identity headers, and
+forwarding the request. See [docs/kong.md](docs/kong.md) for its behavior.
 
 ## Endpoints
 
 - `GET /` ASCII home page with service logo and version details (when `version.json` exists)
 - `GET /version.json` raw version metadata (`404` when missing)
 - `GET /health` service health response
-- `GET /validate` validates certificate + token and returns identity headers as JSON
-- `GET|POST|PUT|PATCH|DELETE /proxy` runs `/validate` logic and forwards request to `kong_proxy.url` when enabled
+- `GET /validate` validates the bearer JWT and acting identity headers, then returns identity values as JSON
+- Development-only: `GET|POST|PUT|PATCH|DELETE /proxy` and `/proxy/{upstream_path:path}` validate and forward requests to `kong_proxy.url` when enabled
+- Development-only: `GET|POST|PUT|PATCH|DELETE /proxy/health` provides an unauthenticated backend health passthrough
 
-See also [docs/kong.md](docs/kong.md) for proxy behavior details.
+See [docs/kong.md](docs/kong.md) for development proxy details.
 
 ## Getting Started
 
 You can run this service natively or with Docker.
-If needed before testing, generate dummy secrets with `bash tools/generate_test_certs.sh`.
 
 ### Docker (preferred)
 
@@ -91,20 +105,25 @@ poetry install
 poetry run python -m app.main
 ```
 
-## Example Validate Call
+## Direct Validate Call
 
 ```bash
 curl -i http://localhost:8503/validate \
   -H "Authorization: Bearer <jwt>" \
-  -H "X-Forwarded-Tls-Client-Cert: <url-encoded-pem-chain>"
+  -H "X-GF-Act-Sub: <jwt-act-sub>" \
+  -H "X-GF-Act-Cn: <jwt-act-cn>"
 ```
 
-Expected outcomes:
+This direct call bypasses both the `cert-info` and `gateway-verifier` Kong
+plugins, so it supplies the acting headers manually. They must match the JWT
+`act.sub` and `act.cn` claims.
 
-- `200` for valid cert + token + matching OIN/fingerprint
-- `401` for missing/invalid bearer header
-- `403` when certificate authentication fails
-- `400` for token/fingerprint/claim mismatches
+Expected direct service responses:
+
+- `200` for a valid JWT with matching acting identity values
+- `400` for JWT verification failures, required claim failures, or acting identity mismatches
+- `401` for a malformed non-Bearer `Authorization` header
+- `500` when required gateway headers are missing
 
 ## Docker Image Builds
 

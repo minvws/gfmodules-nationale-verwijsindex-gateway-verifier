@@ -1,5 +1,5 @@
 publiccodeYmlVersion: "0.5"
-name: Generieke Functies Nationale Verwijsindex Gateway Verifier
+name: Generieke Functies Gateway Verifier
 url: https://github.com/minvws/gfmodules-nationale-verwijsindex-gateway-verifier
 platforms:
   - web
@@ -17,39 +17,40 @@ intendedAudience:
 description:
   nl:
     shortDescription: >-
-      Gateway verificatieservice voor de NVI die inkomende verzoeken
-      verifieert op basis van OIN-identiteit via mTLS en JWT.
+      Gatewayverificatieservice voor de NVI en de PRS die bearer-JWT's
+      valideert aan de hand van de door de gateway aangeleverde handelende
+      identiteit.
     longDescription: |
-      De Nationale Verwijsindex Gateway Verifier is onderdeel van het
-      'Generieke Functies, lokalisatie en addressering' project van het
-      Ministerie van Volksgezondheid, Welzijn en Sport. De FastAPI-service
-      verifieert inkomende gateway-verzoeken op basis van OIN-identiteit. De
-      service valideert zowel de clientcertificaatketen uit de
-      X-Forwarded-Tls-Client-Cert header als de bearer JWT uit de
-      Authorization header. Na succesvolle validatie retourneert de service
-      genormaliseerde identiteitsheaders en kan het verzoek optioneel worden
-      doorgezet naar een geconfigureerde backend URL.
+      De Gateway Verifier voor de NVI en de PRS is onderdeel van het project
+      'Generieke Functies, lokalisatie en addressering' van het Ministerie van
+      Volksgezondheid, Welzijn en Sport. De FastAPI-service valideert inkomende
+      gateway-verzoeken op basis van een bearer-JWT en de handelende identiteit
+      die de gateway aanlevert via X-GF-Act-Sub en X-GF-Act-Cn. De
+      service controleert de JWT-handtekening en vereiste claims en vergelijkt
+      de `act.sub`- en `act.cn`-claims met de gatewaywaarden. Na succesvolle
+      validatie retourneert de service genormaliseerde identiteitsgegevens in
+      `x-gf-*`-velden.
     features:
-      - Verificatie van mTLS-clientcertificaten
-      - Validatie van bearer JWT-tokens
-      - OIN-extractie uit leafcertificaat
+      - Validatie van ondertekende bearer-JWT's en vereiste claims
+      - Vergelijking van de handelende identiteit met de `act`-claims in het JWT
+      - Genormaliseerde identiteitsgegevens voor achterliggende diensten
   en:
     shortDescription: >-
-      Gateway verification service for the NVI that verifies incoming
-      requests based on OIN identity via mTLS and JWT.
+      Gateway verification service for the NVI and PRS that validates bearer
+      JWTs against the acting identity supplied by the gateway.
     longDescription: |
-      The Nationale Verwijsindex Gateway Verifier is part of the 'Generieke
-      Functies, lokalisatie en addressering' project of the Ministry of
-      Health, Welfare and Sport. The FastAPI service verifies incoming
-      gateway requests based on OIN identity. The service validates both the
-      client certificate chain from the X-Forwarded-Tls-Client-Cert header
-      and the bearer JWT from the Authorization header. After successful
-      validation, the service returns normalized identity headers and can
-      optionally proxy the request to a configured backend URL.
+      The Gateway Verifier for the NVI and PRS is part of the 'Generieke
+      Functies, lokalisatie en addressering' project of the Ministry of Health,
+      Welfare and Sport. The FastAPI service validates protected gateway
+      requests using a bearer JWT and the acting identity supplied by the
+      gateway through X-GF-Act-Sub and X-GF-Act-Cn. It verifies the JWT
+      signature and required claims, then compares the `act.sub` and `act.cn`
+      claims with the gateway-supplied values. After successful validation,
+      the service returns normalized `x-gf-*` identity data.
     features:
-      - Verification of mTLS client certificates
-      - Validation of bearer JWT tokens
-      - OIN extraction from leaf certificate
+      - Validation of signed bearer JWTs and required claims
+      - Matching the acting identity against the JWT `act` claims
+      - Normalized identity data for downstream services
 
 legal:
   license: EUPL-1.2

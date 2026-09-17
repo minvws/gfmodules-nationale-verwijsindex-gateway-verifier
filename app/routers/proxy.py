@@ -33,9 +33,10 @@ async def proxy(
     jwt_service: Annotated[JWTService, Depends(get_jwt_service)],
     upstream_path: str = "",
 ) -> Response:
-    """Authenticated reverse proxy that replaces a Kong layer.
+    """Development reverse proxy that emulates Kong validation, enrichment,
+    and forwarding.
 
-    Runs the same mTLS + JWT validation as ``/validate`` and, on success,
+    Runs the same JWT and acting-identity validation as ``/validate`` and, on success,
     forwards the original request to the configured backend
     (``kong_proxy.url``) with the verified ``x-gf-*`` identity headers attached.
     The request method, path (below ``/proxy``), query string and body are all
@@ -55,7 +56,7 @@ async def proxy(
             return validate_response
         identity = json.loads(bytes(validate_response.body))
 
-    # Forward the caller's headers (client certificate, content-type, ...), but
+    # Forward the caller's headers (for example, content-type), but
     # strip any client-supplied x-gf-* so the identity cannot be spoofed, then
     # overlay the verified identity from the validate response.
 

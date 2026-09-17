@@ -7,24 +7,24 @@ from fastapi import APIRouter, Response
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# https://www.patorjk.com/software/taag/#p=display&f=Doom&t=NVI+Gateway+Verifier&x=none&v=4&h=4&w=80&we=false
-LOGO = r""" 
-  _   _ _   _ _____   _____       _                             _   _           _  __ _           
-| \ | | | | |_   _| |  __ \     | |                           | | | |         (_)/ _(_)          
-|  \| | | | | | |   | |  \/ __ _| |_ _____      ____ _ _   _  | | | | ___ _ __ _| |_ _  ___ _ __ 
-| . ` | | | | | |   | | __ / _` | __/ _ \ \ /\ / / _` | | | | | | | |/ _ \ '__| |  _| |/ _ \ '__|
-| |\  \ \_/ /_| |_  | |_\ \ (_| | ||  __/\ V  V / (_| | |_| | \ \_/ /  __/ |  | | | | |  __/ |   
-\_| \_/\___/ \___/   \____/\__,_|\__\___| \_/\_/ \__,_|\__, |  \___/ \___|_|  |_|_| |_|\___|_|   
-                                                        __/ |                                    
-                                                       |___/                                                                                                              
-NVI Gateway Verifier
+# https://www.patorjk.com/software/taag/#p=display&f=Doom&t=Gateway+Verifier&x=none&v=4&h=4&w=80&we=false
+LOGO = r"""
+  _____       _                             _   _           _  __ _
+|  __ \     | |                           | | | |         (_)/ _(_)
+| |  \/ __ _| |_ _____      ____ _ _   _  | | | | ___ _ __ _| |_ _  ___ _ __
+| | __ / _` | __/ _ \ \ /\ / / _` | | | | | | | |/ _ \ '__| |  _| |/ _ \ '__|
+| |_\ \ (_| | ||  __/\ V  V / (_| | |_| | \ \_/ /  __/ |  | | | | |  __/ |
+ \____/\__,_|\__\___| \_/\_/ \__,_|\__, |  \___/ \___|_|  |_|_| |_|\___|_|
+                                    __/ |
+                                   |___/
+Gateway Verifier
 """
 
 
 @router.get(
     "/",
     summary="API Home",
-    description="Display the Nationale Verwijsindex Gateway Verifier API welcome page with ASCII logo and version information.",
+    description="Display the Gateway Verifier API welcome page with ASCII logo and version information.",
     response_class=Response,
     status_code=200,
     responses={
@@ -35,11 +35,11 @@ NVI Gateway Verifier
                     "examples": {
                         "with_version": {
                             "summary": "With version info",
-                            "value": "NVI\n\nVersion: 1.0.0\nCommit: abc123def456",
+                            "value": "Gateway Verifier\n\nVersion: 1.0.0\nCommit: abc123def456",
                         },
                         "no_version": {
                             "summary": "No version info",
-                            "value": "NVI\n\nNo version information found",
+                            "value": "Gateway Verifier\n\nNo version information found",
                         },
                     }
                 }
