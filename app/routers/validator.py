@@ -53,7 +53,7 @@ def run_validate(
             "malformed Authorization header",
             fields={"error_reason": "malformed_authorization_header", "token_present": True},
         )
-        return Response("Bearer authorization header is required", status_code=401)
+        return Response("Bearer authorization header is required", status_code=401, media_type="text/plain")
 
     token = auth_headers.bearer[len("Bearer ") :]
     return _validate_oin(
@@ -81,7 +81,7 @@ def _validate_oin(
             "failed to verify JWT",
             fields={"error_reason": str(e), "token_present": True},
         )
-        return Response("Token verification failed", status_code=400)
+        return Response("Token verification failed", status_code=400, media_type="text/plain")
 
     claims = json.loads(verified_token.claims)
 
@@ -98,7 +98,7 @@ def _validate_oin(
                 "claims": claims,
             },
         )
-        return Response("Missing `act` in claims", status_code=400)
+        return Response("Missing `act` in claims", status_code=400, media_type="text/plain")
 
     sub_org_id = act.get("sub")
     if not sub_org_id:
@@ -113,7 +113,7 @@ def _validate_oin(
                 "claims": claims,
             },
         )
-        return Response("Missing OIN claim in token", status_code=400)
+        return Response("Missing OIN claim in token", status_code=400, media_type="text/plain")
 
     if str(sub_org_id) != str(auth_headers.client_organization_id):
         gflog.emit(
@@ -127,7 +127,7 @@ def _validate_oin(
                 "claims": claims,
             },
         )
-        return Response("Certificate OIN does not match JWT OIN", status_code=400)
+        return Response("Certificate OIN does not match JWT OIN", status_code=400, media_type="text/plain")
 
     token_common_name = act.get("cn")
     if token_common_name != auth_headers.client_common_name:
@@ -143,7 +143,7 @@ def _validate_oin(
             },
         )
 
-        return Response("JWT `act.cn` does not match certificate CommonName", status_code=400)
+        return Response("JWT `act.cn` does not match certificate CommonName", status_code=400, media_type="text/plain")
 
     headers: dict[str, str] = {
         "x-gf-cert-type": "OIN",
@@ -162,7 +162,62 @@ def _validate_oin(
     return JSONResponse(headers, status_code=200)
 
 
-@router.get("/validate")
+@router.get(
+    "/validate",
+    responses={
+        200: {
+            "description": "JWT and client identity validated successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "x-gf-cert-type": "OIN",
+                        "x-gf-audience": "nvi",
+                        "x-gf-scope": "nvi:localize",
+                        "x-gf-sub": "00000001123456780000",
+                        "x-gf-act-sub": "00000001123456700000",
+                        "x-gf-act-cn": "example-common-name",
+                        "x-gf-organization-name": "Example Healthcare Organization",
+                        "x-gf-source-id": "example-source-id",
+                    }
+                }
+            },
+        },
+        400: {
+            "description": "JWT verification failed or required claims are missing or do not match the client identity",
+            "content": {
+                "text/plain": {
+                    "examples": {
+                        "token_verification_failed": {
+                            "summary": "JWT verification failed",
+                            "value": "Token verification failed",
+                        },
+                        "missing_act": {"summary": "Missing act claim", "value": "Missing `act` in claims"},
+                        "missing_oin": {
+                            "summary": "Missing acting organization identifier",
+                            "value": "Missing OIN claim in token",
+                        },
+                        "oin_mismatch": {
+                            "summary": "Acting organization mismatch",
+                            "value": "Certificate OIN does not match JWT OIN",
+                        },
+                        "common_name_mismatch": {
+                            "summary": "Acting common name mismatch",
+                            "value": "JWT `act.cn` does not match certificate CommonName",
+                        },
+                    }
+                }
+            },
+        },
+        401: {
+            "description": "Authorization header does not use the Bearer scheme",
+            "content": {"text/plain": {"example": "Bearer authorization header is required"}},
+        },
+        500: {
+            "description": "Required gateway authentication headers are missing or invalid",
+            "content": {"application/json": {"example": {"detail": "Unauthorized request"}}},
+        },
+    },
+)
 def validate(
     request: Request,
     jwt_service: Annotated[JWTService, Depends(get_jwt_service)],
