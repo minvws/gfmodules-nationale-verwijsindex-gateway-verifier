@@ -105,7 +105,11 @@ poetry install
 poetry run python -m app.main
 ```
 
-## Direct Validate Call
+## Usage
+
+The `gateway-verifier` Kong plugin calls `/validate` after the `cert-info` Kong
+plugin has set `X-GF-Act-Sub` and `X-GF-Act-Cn`. The endpoint can also be called
+directly for local testing:
 
 ```bash
 curl -i http://localhost:8503/validate \
@@ -114,9 +118,8 @@ curl -i http://localhost:8503/validate \
   -H "X-GF-Act-Cn: <jwt-act-cn>"
 ```
 
-This direct call bypasses both the `cert-info` and `gateway-verifier` Kong
-plugins, so it supplies the acting headers manually. They must match the JWT
-`act.sub` and `act.cn` claims.
+In a direct request, supply the acting headers manually with values matching the
+JWT `act.sub` and `act.cn` claims.
 
 Expected direct service responses:
 
