@@ -9,7 +9,7 @@ from app.services.http_service import HttpService
 PATCHED_MODULE = "app.services.http_service.request"
 
 
-@pytest.fixture()
+@pytest.fixture
 def http_service() -> HttpService:
     return HttpService(
         endpoint="https://example.com/api",
