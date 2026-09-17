@@ -59,8 +59,8 @@ class JWTService:
                 expected_type="JWS",
             )
         except JWException as e:
-            logger.error(f"JWT verification error: {e}")
+            logger.exception("JWT verification error")
             raise JwtException(f"JWT validation failed: {e}") from e
         except Exception as e:
-            logger.error(f"Global JWT verification error: {e}")
+            logger.exception("Global JWT verification error")
             raise JwtException(f"Unexpected JWT validation error: {e}") from e
