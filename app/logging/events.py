@@ -62,8 +62,8 @@ class NviLog(BaseLog):
         logging.WARNING,
         (_APP, _SIEM),
         {
-            _APP: ("error_reason", "token_present", "endpoint"),
-            _SIEM: ("error_reason", "token_present", "endpoint"),
+            _APP: ("error_reason", "token_present"),
+            _SIEM: ("error_reason", "token_present"),
         },
     )
     MTLS_BINDING_MISMATCH = LogEvent(  # NVI-AUTH-002
@@ -71,7 +71,7 @@ class NviLog(BaseLog):
         logging.WARNING,
         (_APP, _SIEM),
         {
-            _APP: ("jwt_ura", "cert_thumbprint_jwt", "cert_thumbprint_presented", "endpoint", "client_id"),
+            _APP: ("jwt_ura", "cert_thumbprint_jwt", "cert_thumbprint_presented", "client_id"),
             _SIEM: ("jwt_ura", "cert_thumbprint_presented", "cert_thumbprint_jwt", "client_id"),
         },
     )
@@ -82,8 +82,8 @@ class NviLog(BaseLog):
         logging.WARNING,
         (_APP, _SIEM),
         {
-            _APP: ("jwt_ura", "resource_ura", "resource_id", "endpoint", "method", "client_id"),
-            _SIEM: ("jwt_ura", "resource_ura", "endpoint", "client_id"),
+            _APP: ("jwt_ura", "resource_ura", "resource_id", "client_id"),
+            _SIEM: ("jwt_ura", "resource_ura", "client_id"),
         },
     )
     AUTHENTICATION_SUCCESS = LogEvent(  # NVI-AUTH-004
@@ -91,8 +91,8 @@ class NviLog(BaseLog):
         logging.INFO,
         (_APP, _SIEM),
         {
-            _APP: ("ura_number", "cert_thumbprint_prefix", "endpoint", "method", "ip", "scope"),
-            _SIEM: ("ura_number", "endpoint", "method", "ip", "scope"),
+            _APP: ("ura_number", "cert_thumbprint_prefix"),
+            _SIEM: ("ura_number",),
         },
     )
     MISSING_AUTHORIZATION_HEADER = LogEvent(  # NVI-AUTH-005
@@ -100,22 +100,15 @@ class NviLog(BaseLog):
         logging.WARNING,
         (_APP, _SIEM),
         {
-            _APP: ("endpoint", "method", "token_present", "client_id"),
-            _SIEM: ("endpoint", "client_id"),
+            _APP: ("token_present", "client_id"),
+            _SIEM: ("client_id",),
         },
     )
     SYS_APP_STARTED = _Base.SYS_APP_STARTED.with_id("100601")  # NVI-SYS-001
     SYS_APP_STOPPED = _Base.SYS_APP_STOPPED.with_id("100602")  # NVI-SYS-002
     SYS_APP_CRASHED = _Base.SYS_APP_CRASHED.with_id("100602")  # NVI-SYS-002
     SYS_UNHANDLED_EXCEPTION = _Base.SYS_UNHANDLED_EXCEPTION.with_id("100604")  # NVI-SYS-004
-    SYS_MISSING_CORRELATION_ID = _Base.SYS_MISSING_CORRELATION_ID.replace(  # NVI-SYS-006
-        event_id="100606",
-        streams=(_APP, _SIEM),
-        fields={
-            _APP: ("endpoint", "method"),
-            _SIEM: ("endpoint", "method"),
-        },
-    )
+    SYS_MISSING_CORRELATION_ID = _Base.SYS_MISSING_CORRELATION_ID.with_id("100606")  # NVI-SYS-006
 
 
 class PrsLog(BaseLog):
@@ -130,8 +123,8 @@ class PrsLog(BaseLog):
         logging.WARNING,
         (_APP, _SIEM),
         {
-            _APP: ("error_reason", "token_present", "endpoint", "method"),
-            _SIEM: ("error_reason", "token_present", "endpoint"),
+            _APP: ("error_reason", "token_present"),
+            _SIEM: ("error_reason", "token_present"),
         },
     )
     MTLS_BINDING_MISMATCH = LogEvent(  # PRS-AUTH-002
@@ -139,7 +132,7 @@ class PrsLog(BaseLog):
         logging.WARNING,
         (_APP, _SIEM),
         {
-            _APP: ("handelende_oin", "cert_thumbprint_jwt", "cert_thumbprint_presented", "endpoint"),
+            _APP: ("handelende_oin", "cert_thumbprint_jwt", "cert_thumbprint_presented"),
             _SIEM: ("handelende_oin", "cert_thumbprint_presented", "cert_thumbprint_jwt"),
         },
     )
@@ -148,8 +141,8 @@ class PrsLog(BaseLog):
         logging.WARNING,
         (_APP, _SIEM),
         {
-            _APP: ("handelende_oin", "endpoint", "failure_reason"),
-            _SIEM: ("handelende_oin", "endpoint"),
+            _APP: ("handelende_oin", "failure_reason"),
+            _SIEM: ("handelende_oin",),
         },
     )
     # A token OIN that does not match the certificate OIN is a token-binding
@@ -160,8 +153,8 @@ class PrsLog(BaseLog):
         logging.INFO,
         (_APP, _SIEM),
         {
-            _APP: ("handelende_oin", "namens_oin", "cert_thumbprint_prefix", "endpoint", "method", "ip", "scope"),
-            _SIEM: ("handelende_oin", "namens_oin", "endpoint", "method", "ip", "scope"),
+            _APP: ("handelende_oin", "namens_oin", "cert_thumbprint_prefix"),
+            _SIEM: ("handelende_oin", "namens_oin"),
         },
     )
     MISSING_AUTHORIZATION_HEADER = LogEvent(  # PRS-AUTH-005
@@ -169,22 +162,15 @@ class PrsLog(BaseLog):
         logging.WARNING,
         (_APP, _SIEM),
         {
-            _APP: ("endpoint", "method", "token_present", "handelende_oin"),
-            _SIEM: ("endpoint", "handelende_oin"),
+            _APP: ("token_present", "handelende_oin"),
+            _SIEM: ("handelende_oin",),
         },
     )
     SYS_APP_STARTED = _Base.SYS_APP_STARTED.with_id("270401")  # PRS-SYS-001
     SYS_APP_STOPPED = _Base.SYS_APP_STOPPED.with_id("270402")  # PRS-SYS-002
     SYS_APP_CRASHED = _Base.SYS_APP_CRASHED.with_id("270402")  # PRS-SYS-002
     SYS_UNHANDLED_EXCEPTION = _Base.SYS_UNHANDLED_EXCEPTION.with_id("270404")  # PRS-SYS-004
-    SYS_MISSING_CORRELATION_ID = _Base.SYS_MISSING_CORRELATION_ID.replace(  # PRS-SYS-007
-        event_id="270407",
-        streams=(_APP, _SIEM),
-        fields={
-            _APP: ("endpoint", "method"),
-            _SIEM: ("endpoint", "method"),
-        },
-    )
+    SYS_MISSING_CORRELATION_ID = _Base.SYS_MISSING_CORRELATION_ID.with_id("270407")  # PRS-SYS-007
 
 
 def get_application_log() -> type[BaseLog]:

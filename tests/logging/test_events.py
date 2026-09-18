@@ -1,17 +1,12 @@
 import pytest
 from gfmodules.logging import (
-    DefaultEventCatalogue,
     EventCatalogue,
-    LoggingStreams,
     declared_events,
 )
 from gfmodules.logging.testing import assert_catalogue_complete
 
 from app.config import ApplicationLogType
 from app.logging.events import BaseLog, NviLog, PrsLog, get_application_log
-
-_APP = LoggingStreams.APP
-_SIEM = LoggingStreams.SIEM
 
 _CATALOGUES = [NviLog, PrsLog]
 
@@ -84,11 +79,6 @@ class TestTheSystemsUseDistinctIds:
 class TestCatalogueSelection:
     def test_defaults_to_nvi(self) -> None:
         assert get_application_log() is NviLog
-
-    def test_both_report_a_missing_correlation_id_to_siem(self) -> None:
-        assert DefaultEventCatalogue.SYS_MISSING_CORRELATION_ID.streams == (_APP,)
-        for catalogue in _CATALOGUES:
-            assert catalogue.SYS_MISSING_CORRELATION_ID.streams == (_APP, _SIEM)
 
     def test_the_selection_covers_every_configured_log_type(self) -> None:
         assert set(ApplicationLogType) == {ApplicationLogType.nvi, ApplicationLogType.prs}
