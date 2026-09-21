@@ -12,7 +12,7 @@ exclude = ["app/debug"]
 
 [tool.poetry.dependencies]
 python = "^3.14"
-uvicorn = "0.52.4"
+uvicorn = "0.53.0"
 fastapi = ">=0.135,<0.142"
 pydantic-settings = "^2.13.0"
 inject = "^5.3.0"
