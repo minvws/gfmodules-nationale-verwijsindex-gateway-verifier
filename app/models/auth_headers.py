@@ -7,8 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field
 class AuthHeaders(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    client_organization_id: Annotated[str, Field(alias="x-gf-act-sub")]
-    client_common_name: Annotated[str, Field(alias="x-gf-act-cn")]
+    certificate_organization_identifier: Annotated[str, Field(alias="x-gf-act-sub")]
+    certificate_domain: Annotated[str, Field(alias="x-gf-act-cn")]
     bearer: Annotated[str, Field(alias="Authorization")]
 
     @classmethod
