@@ -57,6 +57,7 @@ On success, `/validate` returns these identity values as JSON:
 - `x-gf-act-sub`
 - `x-gf-act-cn`
 - `x-gf-organization-name`
+- `x-gf-client-id`
 - `x-gf-source-id` (when the signed `source_id` claim has a value)
 
 For local development, where Kong is not handling verification, the

@@ -40,9 +40,9 @@ or invalid JSON response to `502`.
    `x-gf-cert-type`, `x-gf-audience`, `x-gf-scope`, `x-gf-act-sub`, and
    `x-gf-act-cn`. An absent `scope` claim produces `x-gf-scope` with an empty
    value; an explicitly null `scope` claim omits that header. It forwards
-   `x-gf-sub` and `x-gf-organization-name` only when their JWT claims are
-   non-null. When the signed `source_id` claim has a value, it also adds
-   `x-gf-source-id`.
+   `x-gf-sub`, `x-gf-organization-name`, and `x-gf-client-id` only when their
+   JWT claims are non-null. When the signed `source_id` claim has a value, it
+   also adds `x-gf-source-id`.
 5. The original HTTP method, path below `/proxy`, query string, and request
    body are forwarded to `kong_proxy.url` with those headers attached.
 6. The backend response status, body, and response headers are returned to the

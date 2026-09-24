@@ -92,52 +92,52 @@ def _validate_oin(
             log.JWT_VERIFICATION_FAILED,
             "Missing act in claims",
             fields={
-                "client_organization_id": auth_headers.client_organization_id,
-                "client_common_name": auth_headers.client_common_name,
+                "certificate_organization_identifier": auth_headers.certificate_organization_identifier,
+                "certificate_domain": auth_headers.certificate_domain,
                 "failure_reason": "oin_mismatch",
                 "claims": claims,
             },
         )
         return PlainTextResponse("Missing `act` in claims", status_code=400)
 
-    sub_org_id = act.get("sub")
-    if not sub_org_id:
+    act_sub = act.get("sub")
+    if not act_sub:
         gflog.emit(
             logger,
             log.URA_AUTHORIZATION_MISMATCH,
             "missing OIN claim in token",
             fields={
-                "client_organization_id": auth_headers.client_organization_id,
-                "client_common_name": auth_headers.client_common_name,
+                "certificate_organization_identifier": auth_headers.certificate_organization_identifier,
+                "certificate_domain": auth_headers.certificate_domain,
                 "failure_reason": "missing_oin_claim",
                 "claims": claims,
             },
         )
         return PlainTextResponse("Missing OIN claim in token", status_code=400)
 
-    if str(sub_org_id) != str(auth_headers.client_organization_id):
+    if str(act_sub) != str(auth_headers.certificate_organization_identifier):
         gflog.emit(
             logger,
             log.URA_AUTHORIZATION_MISMATCH,
             "certificate OIN does not match JWT OIN",
             fields={
-                "client_organization_id": auth_headers.client_organization_id,
-                "client_common_name": auth_headers.client_common_name,
+                "certificate_organization_identifier": auth_headers.certificate_organization_identifier,
+                "certificate_domain": auth_headers.certificate_domain,
                 "failure_reason": "oin_mismatch",
                 "claims": claims,
             },
         )
         return PlainTextResponse("Certificate OIN does not match JWT OIN", status_code=400)
 
-    token_common_name = act.get("cn")
-    if token_common_name != auth_headers.client_common_name:
+    act_cn = act.get("cn")
+    if act_cn != auth_headers.certificate_domain:
         gflog.emit(
             logger,
             log.JWT_VERIFICATION_FAILED,
             "JWT act.cn does not match certificate CommonName",
             fields={
-                "client_organization_id": auth_headers.client_organization_id,
-                "client_common_name": auth_headers.client_common_name,
+                "certificate_organization_identifier": auth_headers.certificate_organization_identifier,
+                "certificate_domain": auth_headers.certificate_domain,
                 "failure_reason": "oin_mismatch",
                 "claims": claims,
             },
@@ -150,9 +150,10 @@ def _validate_oin(
         "x-gf-audience": _aud_str(claims.get("aud")),
         "x-gf-scope": claims.get("scope", ""),
         "x-gf-sub": claims.get("sub"),  # this is the parent org (RFC. 8693)
-        "x-gf-act-sub": sub_org_id,
-        "x-gf-act-cn": token_common_name,
+        "x-gf-act-sub": act_sub,
+        "x-gf-act-cn": act_cn,
         "x-gf-organization-name": claims.get("organization_name"),
+        "x-gf-client-id": claims.get("client_id"),  # Identifier of client that requested the token (RFC. 8693)
     }
 
     if claims.get("source_id"):
@@ -177,6 +178,7 @@ def _validate_oin(
                         "x-gf-act-sub": "00000001123456700000",
                         "x-gf-act-cn": "example-common-name",
                         "x-gf-organization-name": "Example Healthcare Organization",
+                        "x-gf-client-id": "example-client-id",
                         "x-gf-source-id": "example-source-id",
                     }
                 }
