@@ -93,7 +93,7 @@ def _validate_oin(
             "Missing act in claims",
             fields={
                 "certificate_organization_identifier": auth_headers.certificate_organization_identifier,
-                "certificate_domain": auth_headers.certificate_domain,
+                "client_common_name": auth_headers.client_common_name,
                 "failure_reason": "oin_mismatch",
                 "claims": claims,
             },
@@ -108,7 +108,7 @@ def _validate_oin(
             "missing OIN claim in token",
             fields={
                 "certificate_organization_identifier": auth_headers.certificate_organization_identifier,
-                "certificate_domain": auth_headers.certificate_domain,
+                "client_common_name": auth_headers.client_common_name,
                 "failure_reason": "missing_oin_claim",
                 "claims": claims,
             },
@@ -122,7 +122,7 @@ def _validate_oin(
             "certificate OIN does not match JWT OIN",
             fields={
                 "certificate_organization_identifier": auth_headers.certificate_organization_identifier,
-                "certificate_domain": auth_headers.certificate_domain,
+                "client_common_name": auth_headers.client_common_name,
                 "failure_reason": "oin_mismatch",
                 "claims": claims,
             },
@@ -130,14 +130,14 @@ def _validate_oin(
         return PlainTextResponse("Certificate OIN does not match JWT OIN", status_code=400)
 
     act_cn = act.get("cn")
-    if act_cn != auth_headers.certificate_domain:
+    if act_cn != auth_headers.client_common_name:
         gflog.emit(
             logger,
             log.JWT_VERIFICATION_FAILED,
             "JWT act.cn does not match certificate CommonName",
             fields={
                 "certificate_organization_identifier": auth_headers.certificate_organization_identifier,
-                "certificate_domain": auth_headers.certificate_domain,
+                "client_common_name": auth_headers.client_common_name,
                 "failure_reason": "oin_mismatch",
                 "claims": claims,
             },
