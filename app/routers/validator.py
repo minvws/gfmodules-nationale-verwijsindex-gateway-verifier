@@ -8,7 +8,7 @@ from starlette.responses import JSONResponse, PlainTextResponse
 
 from app.config import Config, get_config
 from app.container import get_jwt_service
-from app.logging.events import BaseLog, get_application_log
+from app.logging.events import Log
 from app.models.auth_headers import AuthHeaders
 from app.services.jwt import JwtException, JWTService
 
@@ -29,14 +29,13 @@ def run_validate(
 ) -> Response:
     logger.debug("Received request for /validate endpoint")
     config = get_config()
-    log = get_application_log()
 
     try:
         auth_headers = AuthHeaders.from_request(request)
     except ValueError:
         gflog.emit(
             logger,
-            log.MISSING_AUTHORIZATION_HEADER,
+            Log.MISSING_AUTHORIZATION_HEADER,
             "Headers are not correctly enforced in gateway, invalid authorization headers in request.",
             fields={
                 "failure_reason": "missing_oin_claim",
@@ -49,7 +48,7 @@ def run_validate(
     if not auth_headers.bearer.startswith("Bearer "):
         gflog.emit(
             logger,
-            log.JWT_VERIFICATION_FAILED,
+            Log.MALFORMED_AUTHORIZATION_HEADER,
             "malformed Authorization header",
             fields={"error_reason": "malformed_authorization_header", "token_present": True},
         )
@@ -57,7 +56,6 @@ def run_validate(
 
     token = auth_headers.bearer[len("Bearer ") :]
     return _validate_oin(
-        log=log,
         auth_headers=auth_headers,
         token=token,
         jwt_service=jwt_service,
@@ -66,7 +64,6 @@ def run_validate(
 
 
 def _validate_oin(
-    log: type[BaseLog],
     auth_headers: AuthHeaders,
     token: str,
     jwt_service: JWTService,
@@ -77,7 +74,7 @@ def _validate_oin(
     except JwtException as e:
         gflog.emit(
             logger,
-            log.JWT_VERIFICATION_FAILED,
+            Log.JWT_VERIFICATION_FAILED,
             "failed to verify JWT",
             fields={"error_reason": str(e), "token_present": True},
         )
@@ -89,7 +86,7 @@ def _validate_oin(
     if act is None:
         gflog.emit(
             logger,
-            log.JWT_VERIFICATION_FAILED,
+            Log.MISSING_ACT_CLAIM,
             "Missing act in claims",
             fields={
                 "certificate_organization_identifier": auth_headers.certificate_organization_identifier,
@@ -104,7 +101,7 @@ def _validate_oin(
     if not act_sub:
         gflog.emit(
             logger,
-            log.URA_AUTHORIZATION_MISMATCH,
+            Log.MISSING_ORGANIZATION_CLAIM,
             "missing OIN claim in token",
             fields={
                 "certificate_organization_identifier": auth_headers.certificate_organization_identifier,
@@ -118,7 +115,7 @@ def _validate_oin(
     if str(act_sub) != str(auth_headers.certificate_organization_identifier):
         gflog.emit(
             logger,
-            log.URA_AUTHORIZATION_MISMATCH,
+            Log.ORGANIZATION_AUTHORIZATION_MISMATCH,
             "certificate OIN does not match JWT OIN",
             fields={
                 "certificate_organization_identifier": auth_headers.certificate_organization_identifier,
@@ -133,7 +130,7 @@ def _validate_oin(
     if act_cn != auth_headers.client_common_name:
         gflog.emit(
             logger,
-            log.JWT_VERIFICATION_FAILED,
+            Log.COMMON_NAME_AUTHORIZATION_MISMATCH,
             "JWT act.cn does not match certificate CommonName",
             fields={
                 "certificate_organization_identifier": auth_headers.certificate_organization_identifier,
@@ -158,7 +155,7 @@ def _validate_oin(
 
     if claims.get("source_id"):
         headers["x-gf-source-id"] = str(claims["source_id"])
-    gflog.emit(logger, log.AUTHENTICATION_SUCCESS, "successfully validated JWT + Client", fields={"claims": claims})
+    gflog.emit(logger, Log.AUTHENTICATION_SUCCESS, "successfully validated JWT + Client", fields={"claims": claims})
 
     return JSONResponse(headers, status_code=200)
 
