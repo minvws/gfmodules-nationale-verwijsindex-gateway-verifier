@@ -13,7 +13,7 @@ from gfmodules.logging.middleware import RequestContextMiddleware
 
 from app import container
 from app.config import _ENVIRONMENT_CONFIG_PATH_NAME, _PATH, get_config
-from app.logging.events import get_application_log
+from app.logging.events import Log
 from app.middleware.stats import StatsdMiddleware
 from app.routers.default import router as default_router
 from app.routers.health import router as health_router
@@ -75,7 +75,7 @@ def setup_logging() -> None:
     gflog.configure(
         config=config.logging,
         loglevel=config.app.loglevel,
-        catalogue=get_application_log(),
+        catalogue=Log,
     )
 
 

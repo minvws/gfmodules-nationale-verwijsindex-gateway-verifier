@@ -28,16 +28,7 @@ class ConfigApp(BaseModel):
     loglevel: LogLevel = Field(default=LogLevel.info)
 
 
-class ApplicationLogType(str, Enum):
-    nvi = "nvi"
-    prs = "prs"
-
-
 class ConfigLogging(GFConfigLogging):
-    # Which system's audit events are emitted (the verifier can front NVI or PRS,
-    # and each has its own event IDs and field specs).
-    application_log_type: ApplicationLogType = Field(default=ApplicationLogType.nvi)
-
     _split_console_streams = field_validator("console_streams", mode="before")(split_comma_separated())
 
 

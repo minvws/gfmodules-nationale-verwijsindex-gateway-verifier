@@ -1,9 +1,3 @@
-"""Asserts each /validate branch emits the correct audit event.
-
-NVI-AUTH events per issue 994 (default), PRS-AUTH events per issue 1034 when
-``logging.application_log_type`` is set to ``prs``.
-"""
-
 import json
 import logging
 from unittest.mock import MagicMock
@@ -13,7 +7,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.config import (
-    ApplicationLogType,
     Config,
     ConfigApp,
     ConfigKongProxy,
@@ -25,7 +18,7 @@ from app.config import (
     set_config,
 )
 from app.container import get_jwt_service
-from app.logging.events import NviLog, PrsLog
+from app.logging.events import Log
 from app.routers.validator import router
 from app.services.jwt import JwtException
 
@@ -98,7 +91,7 @@ def _record(caplog: pytest.LogCaptureFixture, event_id: str) -> logging.LogRecor
 def test_missing_header_logs_005(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.DEBUG):
         client.get("/validate")
-    record = _record(caplog, NviLog.MISSING_AUTHORIZATION_HEADER.event_id)
+    record = _record(caplog, Log.MISSING_AUTHORIZATION_HEADER.event_id)
     assert record.token_present is False  # type: ignore[attr-defined]
 
 
@@ -112,7 +105,7 @@ def test_non_bearer_header_logs_001(client: TestClient, caplog: pytest.LogCaptur
                 "Authorization": "Basic xx",
             },
         )
-    record = _record(caplog, NviLog.JWT_VERIFICATION_FAILED.event_id)
+    record = _record(caplog, Log.MALFORMED_AUTHORIZATION_HEADER.event_id)
     assert record.error_reason == "malformed_authorization_header"  # type: ignore[attr-defined]
     assert record.token_present is True  # type: ignore[attr-defined]
 
@@ -123,8 +116,43 @@ def test_jwt_verify_failure_logs_001(
     jwt_service.verify.side_effect = JwtException("expired")
     with caplog.at_level(logging.DEBUG):
         client.get("/validate", headers=headers())
-    record = _record(caplog, NviLog.JWT_VERIFICATION_FAILED.event_id)
+    record = _record(caplog, Log.JWT_VERIFICATION_FAILED.event_id)
     assert record.error_reason == "expired"  # type: ignore[attr-defined]
+
+
+def test_missing_act_logs_missing_act_claim(
+    client: TestClient, jwt_service: MagicMock, caplog: pytest.LogCaptureFixture
+) -> None:
+    token = MagicMock()
+    token.claims = json.dumps(
+        {
+            "sub": OTHER_ORGANIZATION_ID,
+            "cnf": {"x5t#S256": "validthumbprint"},
+        }
+    )
+    jwt_service.verify.return_value = token
+    with caplog.at_level(logging.DEBUG):
+        client.get("/validate", headers=headers())
+    record = _record(caplog, Log.MISSING_ACT_CLAIM.event_id)
+    assert record.claims["sub"] == OTHER_ORGANIZATION_ID  # type: ignore[attr-defined]
+
+
+def test_missing_act_sub_logs_missing_organization_claim(
+    client: TestClient, jwt_service: MagicMock, caplog: pytest.LogCaptureFixture
+) -> None:
+    token = MagicMock()
+    token.claims = json.dumps(
+        {
+            "sub": OTHER_ORGANIZATION_ID,
+            "act": {"cn": "other-common-name"},
+            "cnf": {"x5t#S256": "validthumbprint"},
+        }
+    )
+    jwt_service.verify.return_value = token
+    with caplog.at_level(logging.DEBUG):
+        client.get("/validate", headers=headers())
+    record = _record(caplog, Log.MISSING_ORGANIZATION_CLAIM.event_id)
+    assert record.claims["act"] == {"cn": "other-common-name"}  # type: ignore[attr-defined]
 
 
 def test_oin_mismatch_logs_003(client: TestClient, jwt_service: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
@@ -139,81 +167,34 @@ def test_oin_mismatch_logs_003(client: TestClient, jwt_service: MagicMock, caplo
     jwt_service.verify.return_value = token
     with caplog.at_level(logging.DEBUG):
         client.get("/validate", headers=headers())
-    record = _record(caplog, NviLog.URA_AUTHORIZATION_MISMATCH.event_id)
+    record = _record(caplog, Log.ORGANIZATION_AUTHORIZATION_MISMATCH.event_id)
     assert record.claims["sub"] == OTHER_ORGANIZATION_ID  # type: ignore[attr-defined]
 
 
-def test_success_logs_004(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
-    with caplog.at_level(logging.DEBUG):
-        response = client.get("/validate", headers=headers())
-    assert response.status_code == 200
-    record = _record(caplog, NviLog.AUTHENTICATION_SUCCESS.event_id)
-    assert record.claims["sub"] == ORGANIZATION_ID  # type: ignore[attr-defined]
-    assert record.claims["act"]["cn"] == CLIENT_COMMON_NAME  # type: ignore[attr-defined]
-    assert record.claims["act"]["sub"] == CLIENT_ORGANIZATION_ID  # type: ignore[attr-defined]
-    assert record.claims["scope"] == "test-scope"  # type: ignore[attr-defined]
-
-
-# --- PRS-AUTH variants (logging.application_log_type = prs, issue 1034) ---
-
-
-@pytest.fixture
-def prs_config(test_config: Config) -> Config:
-    test_config.logging.application_log_type = ApplicationLogType.prs
-    return test_config
-
-
-def test_prs_missing_header_logs_200404(
-    prs_config: Config, client: TestClient, caplog: pytest.LogCaptureFixture
-) -> None:
-    with caplog.at_level(logging.DEBUG):
-        client.get("/validate")
-    record = _record(caplog, PrsLog.MISSING_AUTHORIZATION_HEADER.event_id)
-    assert record.token_present is False  # type: ignore[attr-defined]
-
-
-def test_prs_jwt_verify_failure_logs_200400(
-    prs_config: Config,
-    client: TestClient,
-    jwt_service: MagicMock,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    jwt_service.verify.side_effect = JwtException("expired")
-    with caplog.at_level(logging.DEBUG):
-        client.get("/validate", headers=headers())
-    record = _record(caplog, PrsLog.JWT_VERIFICATION_FAILED.event_id)
-    assert record.error_reason == "expired"  # type: ignore[attr-defined]
-
-
-def test_prs_oin_mismatch_logs_200406(
-    prs_config: Config,
-    client: TestClient,
-    jwt_service: MagicMock,
-    caplog: pytest.LogCaptureFixture,
+def test_common_name_mismatch_logs_common_name_authorization_mismatch(
+    client: TestClient, jwt_service: MagicMock, caplog: pytest.LogCaptureFixture
 ) -> None:
     token = MagicMock()
     token.claims = json.dumps(
         {
-            "act": {"sub": OTHER_ORGANIZATION_ID},
-            "sub": OTHER_ORGANIZATION_ID,
+            "sub": ORGANIZATION_ID,
+            "act": {"sub": CLIENT_ORGANIZATION_ID, "cn": "other-common-name"},
             "cnf": {"x5t#S256": "validthumbprint"},
         }
     )
     jwt_service.verify.return_value = token
     with caplog.at_level(logging.DEBUG):
         client.get("/validate", headers=headers())
-    record = _record(caplog, PrsLog.TOKEN_BINDING_INVALID.event_id)
-    assert record.failure_reason == "oin_mismatch"  # type: ignore[attr-defined]
-    assert record.claims["sub"] == OTHER_ORGANIZATION_ID  # type: ignore[attr-defined]
+    record = _record(caplog, Log.COMMON_NAME_AUTHORIZATION_MISMATCH.event_id)
+    assert record.claims["act"]["cn"] == "other-common-name"  # type: ignore[attr-defined]
 
 
-def test_prs_success_logs_200403(prs_config: Config, client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
+def test_success_logs_004(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.DEBUG):
         response = client.get("/validate", headers=headers())
     assert response.status_code == 200
-    record = _record(caplog, PrsLog.AUTHENTICATION_SUCCESS.event_id)
+    record = _record(caplog, Log.AUTHENTICATION_SUCCESS.event_id)
     assert record.claims["sub"] == ORGANIZATION_ID  # type: ignore[attr-defined]
     assert record.claims["act"]["cn"] == CLIENT_COMMON_NAME  # type: ignore[attr-defined]
     assert record.claims["act"]["sub"] == CLIENT_ORGANIZATION_ID  # type: ignore[attr-defined]
-    # prefix only, never the full thumbprint
     assert record.claims["scope"] == "test-scope"  # type: ignore[attr-defined]

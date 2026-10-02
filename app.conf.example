@@ -3,8 +3,6 @@
 loglevel=debug
 
 [logging]
-# Log type can be one of: nvi or prs, depending on which system is being used.
-# application_log_type=nvi
 # All keys are optional. When syslog_path is omitted, logs only go to stdout.
 # Single syslog channel in host:port format (UDP). All streams (app, siem,
 # public_inspect, debug) are sent here; each JSON record carries a stream_id

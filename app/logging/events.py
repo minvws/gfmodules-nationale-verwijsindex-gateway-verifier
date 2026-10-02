@@ -1,10 +1,7 @@
 import hashlib
 import logging
-from typing import ClassVar
 
 from gfmodules.logging import DefaultEventCatalogue, LogEvent, LoggingStreams
-
-from app.config import ApplicationLogType, get_config
 
 _APP = LoggingStreams.APP
 _SIEM = LoggingStreams.SIEM
@@ -15,33 +12,124 @@ _Base = DefaultEventCatalogue
 _THUMBPRINT_PREFIX_LEN = 8
 
 
-class BaseLog(_Base):
-    """Audit events for the gateway verifier.
-
-    The verifier can front different systems (NVI, PRS) that each define their
-    own event IDs and per-stream field specs for the same validation triggers.
-    Subclasses bind each trigger below to the system-specific event; call sites
-    pass the union of both systems' fields and the per-stream allow-lists route
-    what each event actually emits.
-    """
-
-    JWT_VERIFICATION_FAILED: ClassVar[LogEvent]
-    MTLS_BINDING_MISMATCH: ClassVar[LogEvent]
-    # Token-binding claim (cnf/x5t#S256) missing, or the token identity does not
-    # match the TLS identity. NVI has no separate event for this trigger; PRS
-    # defines a dedicated one (PRS-AUTH-007).
-    TOKEN_BINDING_INVALID: ClassVar[LogEvent]
-    URA_AUTHORIZATION_MISMATCH: ClassVar[LogEvent]
-    AUTHENTICATION_SUCCESS: ClassVar[LogEvent]
-    MISSING_AUTHORIZATION_HEADER: ClassVar[LogEvent]
+class Log(_Base):
+    JWT_VERIFICATION_FAILED = LogEvent(
+        "200400",
+        logging.WARNING,
+        (_APP, _SIEM),
+        {
+            _APP: ("error_reason", "token_present"),
+            _SIEM: ("error_reason", "token_present"),
+        },
+    )
+    MALFORMED_AUTHORIZATION_HEADER = LogEvent(
+        "200409",
+        logging.WARNING,
+        (_APP, _SIEM),
+        {
+            _APP: ("error_reason", "token_present"),
+            _SIEM: ("error_reason", "token_present"),
+        },
+    )
+    MTLS_BINDING_MISMATCH = LogEvent(
+        "200401",
+        logging.WARNING,
+        (_APP, _SIEM),
+        {
+            _APP: (
+                "certificate_organization_identifier",
+                "cert_thumbprint_jwt",
+                "cert_thumbprint_presented",
+                "client_id",
+            ),
+            _SIEM: (
+                "certificate_organization_identifier",
+                "cert_thumbprint_presented",
+                "cert_thumbprint_jwt",
+                "client_id",
+            ),
+        },
+    )
+    TOKEN_BINDING_INVALID = LogEvent(
+        "200406",
+        logging.WARNING,
+        (_APP, _SIEM),
+        {
+            _APP: ("certificate_organization_identifier", "failure_reason"),
+            _SIEM: ("certificate_organization_identifier",),
+        },
+    )
+    ORGANIZATION_AUTHORIZATION_MISMATCH = LogEvent(
+        "200407",
+        logging.WARNING,
+        (_APP, _SIEM),
+        {
+            _APP: (
+                "certificate_organization_identifier",
+                "resource_organization_identifier",
+                "resource_id",
+                "client_id",
+            ),
+            _SIEM: ("certificate_organization_identifier", "resource_organization_identifier", "client_id"),
+        },
+    )
+    MISSING_ORGANIZATION_CLAIM = LogEvent(
+        "200408",
+        logging.WARNING,
+        (_APP, _SIEM),
+        {
+            _APP: ("certificate_organization_identifier", "client_id"),
+            _SIEM: ("certificate_organization_identifier", "client_id"),
+        },
+    )
+    MISSING_ACT_CLAIM = LogEvent(
+        "200410",
+        logging.WARNING,
+        (_APP, _SIEM),
+        {
+            _APP: ("certificate_organization_identifier", "client_id"),
+            _SIEM: ("certificate_organization_identifier", "client_id"),
+        },
+    )
+    COMMON_NAME_AUTHORIZATION_MISMATCH = LogEvent(
+        "200411",
+        logging.WARNING,
+        (_APP, _SIEM),
+        {
+            _APP: ("certificate_organization_identifier", "client_id"),
+            _SIEM: ("certificate_organization_identifier", "client_id"),
+        },
+    )
+    AUTHENTICATION_SUCCESS = LogEvent(
+        "200403",
+        logging.INFO,
+        (_APP, _SIEM),
+        {
+            _APP: (
+                "certificate_organization_identifier",
+                "represented_organization_identifier",
+                "cert_thumbprint_prefix",
+            ),
+            _SIEM: ("certificate_organization_identifier", "represented_organization_identifier"),
+        },
+    )
+    MISSING_AUTHORIZATION_HEADER = LogEvent(
+        "200404",
+        logging.WARNING,
+        (_APP, _SIEM),
+        {
+            _APP: ("token_present", "client_id", "certificate_organization_identifier"),
+            _SIEM: ("client_id", "certificate_organization_identifier"),
+        },
+    )
+    SYS_APP_STARTED = _Base.SYS_APP_STARTED.with_id("200601")
+    SYS_APP_STOPPED = _Base.SYS_APP_STOPPED.with_id("200602")
+    SYS_APP_CRASHED = _Base.SYS_APP_CRASHED.with_id("200602")
+    SYS_UNHANDLED_EXCEPTION = _Base.SYS_UNHANDLED_EXCEPTION.with_id("200604")
+    SYS_MISSING_CORRELATION_ID = _Base.SYS_MISSING_CORRELATION_ID.with_id("200606")
 
     @staticmethod
     def thumbprint_prefix(value: str | None) -> str | None:
-        """Return a short, non-reversible prefix of a certificate thumbprint.
-
-        The spec requires logging a prefix rather than the full thumbprint on
-        successful authentication (NVI-AUTH-004 / PRS-AUTH-004).
-        """
         if not value:
             return None
         return value[:_THUMBPRINT_PREFIX_LEN]
@@ -51,130 +139,3 @@ class BaseLog(_Base):
         if not value:
             return None
         return hashlib.sha256(value.encode("ascii")).hexdigest()[:16]
-
-
-class NviLog(BaseLog):
-    # Authentication / Authorization (NVI-AUTH) for the gateway verifier.
-    # See https://github.com/minvws/gfmodules-coordination-private/issues/994
-    # The ``fields`` map mirrors the "Stroom 2" (APP) / "Stroom 3" (SIEM) columns.
-    JWT_VERIFICATION_FAILED = LogEvent(  # NVI-AUTH-001
-        "094445",
-        logging.WARNING,
-        (_APP, _SIEM),
-        {
-            _APP: ("error_reason", "token_present"),
-            _SIEM: ("error_reason", "token_present"),
-        },
-    )
-    MTLS_BINDING_MISMATCH = LogEvent(  # NVI-AUTH-002
-        "094446",
-        logging.WARNING,
-        (_APP, _SIEM),
-        {
-            _APP: ("jwt_ura", "cert_thumbprint_jwt", "cert_thumbprint_presented", "client_id"),
-            _SIEM: ("jwt_ura", "cert_thumbprint_presented", "cert_thumbprint_jwt", "client_id"),
-        },
-    )
-    # NVI-AUTH has no dedicated token-binding event; this trigger logs as NVI-AUTH-002.
-    TOKEN_BINDING_INVALID = MTLS_BINDING_MISMATCH
-    URA_AUTHORIZATION_MISMATCH = LogEvent(  # NVI-AUTH-003
-        "094447",
-        logging.WARNING,
-        (_APP, _SIEM),
-        {
-            _APP: ("jwt_ura", "resource_ura", "resource_id", "client_id"),
-            _SIEM: ("jwt_ura", "resource_ura", "client_id"),
-        },
-    )
-    AUTHENTICATION_SUCCESS = LogEvent(  # NVI-AUTH-004
-        "091111",
-        logging.INFO,
-        (_APP, _SIEM),
-        {
-            _APP: ("ura_number", "cert_thumbprint_prefix"),
-            _SIEM: ("ura_number",),
-        },
-    )
-    MISSING_AUTHORIZATION_HEADER = LogEvent(  # NVI-AUTH-005
-        "094449",
-        logging.WARNING,
-        (_APP, _SIEM),
-        {
-            _APP: ("token_present", "client_id"),
-            _SIEM: ("client_id",),
-        },
-    )
-    SYS_APP_STARTED = _Base.SYS_APP_STARTED.with_id("100601")  # NVI-SYS-001
-    SYS_APP_STOPPED = _Base.SYS_APP_STOPPED.with_id("100602")  # NVI-SYS-002
-    SYS_APP_CRASHED = _Base.SYS_APP_CRASHED.with_id("100602")  # NVI-SYS-002
-    SYS_UNHANDLED_EXCEPTION = _Base.SYS_UNHANDLED_EXCEPTION.with_id("100604")  # NVI-SYS-004
-    SYS_MISSING_CORRELATION_ID = _Base.SYS_MISSING_CORRELATION_ID.with_id("100606")  # NVI-SYS-006
-
-
-class PrsLog(BaseLog):
-    # Authentication / Authorization (PRS-AUTH) for the gateway verifier.
-    # See https://github.com/minvws/gfmodules-coordination-private/issues/1034
-    # The ``fields`` map mirrors the "Stroom 2" (APP) / "Stroom 3" (SIEM) columns.
-    # Not defined here: PRS-AUTH-003 (200402, autorisatie geweigerd) is emitted
-    # by the PRS application itself, and PRS-AUTH-006 (200405, rate limit
-    # exceeded) belongs to the rate limiter (KONG).
-    JWT_VERIFICATION_FAILED = LogEvent(  # PRS-AUTH-001
-        "200400",
-        logging.WARNING,
-        (_APP, _SIEM),
-        {
-            _APP: ("error_reason", "token_present"),
-            _SIEM: ("error_reason", "token_present"),
-        },
-    )
-    MTLS_BINDING_MISMATCH = LogEvent(  # PRS-AUTH-002
-        "200401",
-        logging.WARNING,
-        (_APP, _SIEM),
-        {
-            _APP: ("handelende_oin", "cert_thumbprint_jwt", "cert_thumbprint_presented"),
-            _SIEM: ("handelende_oin", "cert_thumbprint_presented", "cert_thumbprint_jwt"),
-        },
-    )
-    TOKEN_BINDING_INVALID = LogEvent(  # PRS-AUTH-007
-        "200406",
-        logging.WARNING,
-        (_APP, _SIEM),
-        {
-            _APP: ("handelende_oin", "failure_reason"),
-            _SIEM: ("handelende_oin",),
-        },
-    )
-    # A token OIN that does not match the certificate OIN is a token-binding
-    # failure in PRS terms (PRS-AUTH-007: "matcht de TLS-identiteit niet").
-    URA_AUTHORIZATION_MISMATCH = TOKEN_BINDING_INVALID
-    AUTHENTICATION_SUCCESS = LogEvent(  # PRS-AUTH-004
-        "200403",
-        logging.INFO,
-        (_APP, _SIEM),
-        {
-            _APP: ("handelende_oin", "namens_oin", "cert_thumbprint_prefix"),
-            _SIEM: ("handelende_oin", "namens_oin"),
-        },
-    )
-    MISSING_AUTHORIZATION_HEADER = LogEvent(  # PRS-AUTH-005
-        "200404",
-        logging.WARNING,
-        (_APP, _SIEM),
-        {
-            _APP: ("token_present", "handelende_oin"),
-            _SIEM: ("handelende_oin",),
-        },
-    )
-    SYS_APP_STARTED = _Base.SYS_APP_STARTED.with_id("270401")  # PRS-SYS-001
-    SYS_APP_STOPPED = _Base.SYS_APP_STOPPED.with_id("270402")  # PRS-SYS-002
-    SYS_APP_CRASHED = _Base.SYS_APP_CRASHED.with_id("270402")  # PRS-SYS-002
-    SYS_UNHANDLED_EXCEPTION = _Base.SYS_UNHANDLED_EXCEPTION.with_id("270404")  # PRS-SYS-004
-    SYS_MISSING_CORRELATION_ID = _Base.SYS_MISSING_CORRELATION_ID.with_id("270407")  # PRS-SYS-007
-
-
-def get_application_log() -> type[BaseLog]:
-    """Return the event definitions for the system this verifier fronts."""
-    if get_config().logging.application_log_type == ApplicationLogType.prs:
-        return PrsLog
-    return NviLog
