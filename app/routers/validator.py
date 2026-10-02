@@ -90,7 +90,7 @@ def _validate_oin(
             "Missing act in claims",
             fields={
                 "certificate_organization_identifier": auth_headers.certificate_organization_identifier,
-                "client_common_name": auth_headers.client_common_name,
+                "client_domains": auth_headers.client_domains,
                 "failure_reason": "oin_mismatch",
                 "claims": claims,
             },
@@ -105,7 +105,7 @@ def _validate_oin(
             "missing OIN claim in token",
             fields={
                 "certificate_organization_identifier": auth_headers.certificate_organization_identifier,
-                "client_common_name": auth_headers.client_common_name,
+                "client_domains": auth_headers.client_domains,
                 "failure_reason": "missing_oin_claim",
                 "claims": claims,
             },
@@ -119,7 +119,7 @@ def _validate_oin(
             "certificate OIN does not match JWT OIN",
             fields={
                 "certificate_organization_identifier": auth_headers.certificate_organization_identifier,
-                "client_common_name": auth_headers.client_common_name,
+                "client_domains": auth_headers.client_domains,
                 "failure_reason": "oin_mismatch",
                 "claims": claims,
             },
@@ -127,14 +127,14 @@ def _validate_oin(
         return PlainTextResponse("Certificate OIN does not match JWT OIN", status_code=400)
 
     act_cn = act.get("cn")
-    if act_cn != auth_headers.client_common_name:
+    if act_cn not in auth_headers.client_domains:
         gflog.emit(
             logger,
             Log.COMMON_NAME_AUTHORIZATION_MISMATCH,
-            "JWT act.cn does not match certificate CommonName",
+            "JWT act.cn does not match certificate CommonName or SAN",
             fields={
                 "certificate_organization_identifier": auth_headers.certificate_organization_identifier,
-                "client_common_name": auth_headers.client_common_name,
+                "client_domains": auth_headers.client_domains,
                 "failure_reason": "oin_mismatch",
                 "claims": claims,
             },
