@@ -1,4 +1,4 @@
-from typing import Annotated, Any, Dict, List, Self
+from typing import Annotated, Any, Self
 
 from fastapi import Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -8,7 +8,7 @@ class AuthHeaders(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     certificate_organization_identifier: Annotated[str, Field(alias="x-gf-act-sub")]
-    client_domains: Annotated[List[str], Field(alias="x-gf-act-cn")]
+    client_domains: Annotated[list[str], Field(alias="x-gf-act-cn")]
     bearer: Annotated[str, Field(alias="Authorization")]
 
     @field_validator("client_domains", mode="before")
@@ -21,7 +21,7 @@ class AuthHeaders(BaseModel):
     @classmethod
     def from_request(cls, req: Request) -> Self:
         headers = req.headers
-        data: Dict[str, Any] = {}
+        data: dict[str, Any] = {}
         for name, field in cls.model_fields.items():
             header_name = field.alias or name
             value = headers.get(header_name)
