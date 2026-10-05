@@ -70,7 +70,6 @@ def setup_stats(config: ConfigStats) -> None:
 
 
 def get_stats() -> Stats:
-    global _STATS
     return _STATS
 
 

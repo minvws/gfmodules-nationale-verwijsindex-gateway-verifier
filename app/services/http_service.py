@@ -61,9 +61,9 @@ class HttpService:
             )
 
             return response
-        except (ConnectionError, Timeout) as e:
+        except (ConnectionError, Timeout):
             logger.exception("Request failed")
-            raise e
-        except HTTPError as e:
+            raise
+        except HTTPError:
             logger.exception("HTTP error occurred")
-            raise e
+            raise

@@ -15,7 +15,7 @@ class OinNumber:
 
     def __init__(self, value: Any) -> None:
         if not isinstance(value, (int, str)):
-            raise ValueError(f"OIN number must be a string or integer, got {type(value).__name__}")
+            raise TypeError(f"OIN number must be a string or integer, got {type(value).__name__}")
 
         if isinstance(value, int) and value < 0:
             raise ValueError("OIN number must be a positive integer")
