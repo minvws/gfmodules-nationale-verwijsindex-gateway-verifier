@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from typing import Annotated
@@ -84,7 +85,9 @@ async def proxy(
 
     # Forward the original request body using the same HTTP method
     body = await request.body()
-    backend_response = http_requests.request(request.method, target, headers=headers, data=body, timeout=30)
+    backend_response = await asyncio.to_thread(
+        http_requests.request, request.method, target, headers=headers, data=body, timeout=30
+    )
 
     response_headers = {
         key: value for key, value in backend_response.headers.items() if key.lower() not in _SKIP_RESPONSE_HEADERS

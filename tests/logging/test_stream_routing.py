@@ -13,7 +13,7 @@ from gfmodules.logging import LoggingStreams, bind_context, update_context
 from gfmodules.logging.formatter import JsonFormatter
 from gfmodules.logging.testing import capture_stream
 
-from app.logging.events import NviLog, PrsLog
+from app.logging.events import Log
 
 _LOGGER_NAME = "app.test_stream_routing"
 
@@ -48,10 +48,10 @@ def test_binding_mismatch_keeps_endpoint_in_both_streams(
     logger, app_messages, siem_messages = streams
     gflog.emit(
         logger,
-        NviLog.MTLS_BINDING_MISMATCH,
+        Log.MTLS_BINDING_MISMATCH,
         "mismatch",
         fields={
-            "jwt_ura": "00000123",
+            "certificate_organization_identifier": "00000123",
             "cert_thumbprint_jwt": "abc",
             "cert_thumbprint_presented": "def",
             "client_id": "00000001",
@@ -63,7 +63,7 @@ def test_binding_mismatch_keeps_endpoint_in_both_streams(
 
     for msg in (app_msg, siem_msg):
         assert msg["endpoint"] == "/validate"
-        assert msg["jwt_ura"] == "00000123"
+        assert msg["certificate_organization_identifier"] == "00000123"
         assert msg["cert_thumbprint_presented"] == "def"
         assert msg["client_id"] == "00000001"
 
@@ -74,9 +74,14 @@ def test_authorization_mismatch_drops_resource_id_from_siem(
     logger, app_messages, siem_messages = streams
     gflog.emit(
         logger,
-        NviLog.URA_AUTHORIZATION_MISMATCH,
+        Log.ORGANIZATION_AUTHORIZATION_MISMATCH,
         "mismatch",
-        fields={"jwt_ura": "00000123", "resource_ura": "00000001", "resource_id": "00000002", "client_id": "00000001"},
+        fields={
+            "certificate_organization_identifier": "00000123",
+            "resource_organization_identifier": "00000001",
+            "resource_id": "00000002",
+            "client_id": "00000001",
+        },
     )
 
     app_msg = app_messages[0]
@@ -86,9 +91,9 @@ def test_authorization_mismatch_drops_resource_id_from_siem(
     assert "resource_id" not in siem_msg
     assert app_msg["method"] == "GET"
     assert siem_msg["method"] == "GET"
-    # resource_ura/jwt_ura in both
-    assert siem_msg["resource_ura"] == "00000001"
-    assert siem_msg["jwt_ura"] == "00000123"
+    # resource_organization_identifier/certificate_organization_identifier in both
+    assert siem_msg["resource_organization_identifier"] == "00000001"
+    assert siem_msg["certificate_organization_identifier"] == "00000123"
 
 
 def test_success_keeps_thumbprint_prefix_only_in_app(
@@ -98,63 +103,33 @@ def test_success_keeps_thumbprint_prefix_only_in_app(
     with update_context({"scope": "test-scope"}):
         gflog.emit(
             logger,
-            NviLog.AUTHENTICATION_SUCCESS,
+            Log.AUTHENTICATION_SUCCESS,
             "ok",
-            fields={"ura_number": "00000123", "cert_thumbprint_prefix": "validthu"},
+            fields={"certificate_organization_identifier": "00000123", "cert_thumbprint_prefix": "validthu"},
         )
 
     app_msg = app_messages[0]
     siem_msg = siem_messages[0]
 
     assert app_msg["cert_thumbprint_prefix"] == "validthu"
-    assert "cert_thumbprint_prefix" not in siem_msg  # not in SIEM allow-list for 004
-    # ura/scope/endpoint/method in both
+    assert "cert_thumbprint_prefix" not in siem_msg  # not in SIEM allow-list for AUTHENTICATION_SUCCESS
+    # organization id/scope/endpoint/method in both
     for msg in (app_msg, siem_msg):
-        assert msg["ura_number"] == "00000123"
+        assert msg["certificate_organization_identifier"] == "00000123"
         assert msg["scope"] == "test-scope"
         assert msg["endpoint"] == "/validate"
 
 
-def test_prs_success_keeps_thumbprint_prefix_only_in_app(
-    streams: Streams,
-) -> None:
-    logger, app_messages, siem_messages = streams
-    with update_context({"scope": "test-scope"}):
-        gflog.emit(
-            logger,
-            PrsLog.AUTHENTICATION_SUCCESS,
-            "ok",
-            fields={
-                "handelende_oin": "00000001123456700000",
-                "ura_number": "00000123",
-                "cert_thumbprint_prefix": "validthu",
-            },
-        )
-
-    app_msg = app_messages[0]
-    siem_msg = siem_messages[0]
-
-    assert app_msg["cert_thumbprint_prefix"] == "validthu"
-    assert "cert_thumbprint_prefix" not in siem_msg  # not in SIEM allow-list for PRS-AUTH-004
-    # oin/scope/endpoint/method in both, NVI-only fields in neither
-    for msg in (app_msg, siem_msg):
-        assert msg["handelende_oin"] == "00000001123456700000"
-        assert msg["scope"] == "test-scope"
-        assert msg["endpoint"] == "/validate"
-        assert msg["method"] == "GET"
-        assert "ura_number" not in msg
-
-
-def test_prs_token_binding_drops_failure_reason_from_siem(
+def test_token_binding_invalid_drops_failure_reason_from_siem(
     streams: Streams,
 ) -> None:
     logger, app_messages, siem_messages = streams
     gflog.emit(
         logger,
-        PrsLog.TOKEN_BINDING_INVALID,
+        Log.TOKEN_BINDING_INVALID,
         "missing cnf claim",
         fields={
-            "handelende_oin": "00000001123456700000",
+            "certificate_organization_identifier": "00000001123456700000",
             "failure_reason": "missing_cnf_claim",
             "cert_thumbprint_presented": "presentedthumb",
         },
@@ -164,9 +139,9 @@ def test_prs_token_binding_drops_failure_reason_from_siem(
     siem_msg = siem_messages[0]
 
     assert app_msg["failure_reason"] == "missing_cnf_claim"
-    assert "failure_reason" not in siem_msg  # not in SIEM allow-list for PRS-AUTH-007
+    assert "failure_reason" not in siem_msg  # not in SIEM allow-list for TOKEN_BINDING_INVALID
     for msg in (app_msg, siem_msg):
-        assert msg["handelende_oin"] == "00000001123456700000"
+        assert msg["certificate_organization_identifier"] == "00000001123456700000"
         assert msg["endpoint"] == "/validate"
         assert "cert_thumbprint_presented" not in msg
 
@@ -190,7 +165,12 @@ def test_records_carry_stream_id_and_application_id() -> None:
     logger.handlers = [handler]
     logger.propagate = False
     try:
-        gflog.emit(logger, NviLog.AUTHENTICATION_SUCCESS, "authenticated", fields={"ura_number": "12345678"})
+        gflog.emit(
+            logger,
+            Log.AUTHENTICATION_SUCCESS,
+            "authenticated",
+            fields={"certificate_organization_identifier": "12345678"},
+        )
     finally:
         logger.handlers = []
 

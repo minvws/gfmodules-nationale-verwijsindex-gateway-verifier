@@ -15,7 +15,7 @@ class OinNumber:
 
     def __init__(self, value: Any) -> None:
         if not isinstance(value, (int, str)):
-            raise ValueError(f"OIN number must be a string or integer, got {type(value).__name__}")
+            raise TypeError(f"OIN number must be a string or integer, got {type(value).__name__}")
 
         if isinstance(value, int) and value < 0:
             raise ValueError("OIN number must be a positive integer")
@@ -44,7 +44,7 @@ class OinNumber:
     def __repr__(self) -> str:
         return f"OinNumber({self.prefix}, {self.number})"
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, OinNumber):
             return self.value == other.value
         return False
